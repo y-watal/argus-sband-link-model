@@ -1,4 +1,4 @@
-from overhead_pass_model.src.config import (
+from config import (
     SX1280_MAX_RF_OUTPUT_DBM,
     SX1280_DC_POWER_W,
     PA_EFFICIENCY,

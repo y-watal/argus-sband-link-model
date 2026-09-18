@@ -1,6 +1,6 @@
 import numpy as np
 
-from overhead_pass_model.src.config import (
+from config import (
     DOWNLINK_FREQUENCY_MHZ,
     POINTING_LOSS_DB,
     OTHER_RF_LOSS_DB,

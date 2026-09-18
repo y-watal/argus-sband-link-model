@@ -1,19 +1,17 @@
-# Python virtual environment
+# Python virtual environments
 .venv/
 venv/
 
 # Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Generated model output
+output/
 
 # macOS
 .DS_Store
 
-# Generated CSV results
-*.csv
-
-# Generated plots
-plots_rate_vs_elevation/
-plots_energy_vs_max_elevation/
-plots_payload_sent_vs_max_elevation/
-plots_tx_time_vs_max_elevation/
+# IDE files
+.vscode/
+.idea/

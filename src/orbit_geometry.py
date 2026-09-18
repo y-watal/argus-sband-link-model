@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from skyfield.api import EarthSatellite, load, wgs84
 
-from overhead_pass_model.src.config import (
+from config import (
     GROUND_STATION_LAT_DEG,
     GROUND_STATION_LON_DEG,
     GROUND_STATION_ELEVATION_M,

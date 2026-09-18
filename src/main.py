@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from overhead_pass_model.src.config import (
+from config import (
+    DATA_OUTPUT_DIRECTORY,
     MESSAGE_SIZE_MB,
     MESSAGE_SIZE_BITS,
     TX_POWER_DBM_OPTIONS,
@@ -12,16 +13,16 @@ from overhead_pass_model.src.config import (
     PASS_SEARCH_HOURS,
 )
 
-from overhead_pass_model.src.orbit_geometry import (
+from orbit_geometry import (
     create_orbit_context,
     find_passes,
     sample_pass,
     passes_to_dataframe,
 )
 
-from overhead_pass_model.src.radio_link import build_link_timeline
-from overhead_pass_model.src.power_model import transmitter_dc_power_w
-from overhead_pass_model.src.plotting import make_rate_plots, make_pass_plots
+from radio_link import build_link_timeline
+from power_model import transmitter_dc_power_w
+from plotting import make_rate_plots, make_pass_plots
 
 
 # ============================================================================
@@ -29,13 +30,7 @@ from overhead_pass_model.src.plotting import make_rate_plots, make_pass_plots
 # ============================================================================
 
 def interpolate_value(times, values, target_time):
-    return float(
-        np.interp(
-            target_time,
-            times,
-            values,
-        )
-    )
+    return float(np.interp(target_time, times, values))
 
 
 # ============================================================================
@@ -112,10 +107,7 @@ def simulate_earliest_transmission(link_df, tx_power_dbm):
 
     return {
         "completed": completed,
-        "payload_sent_mb": min(
-            total_bits / 8.0 / 1e6,
-            MESSAGE_SIZE_MB,
-        ),
+        "payload_sent_mb": min(total_bits / 8.0 / 1e6, MESSAGE_SIZE_MB),
         "tx_time_s": tx_time_s,
         "tx_time_min": tx_time_s / 60.0,
         "start_time_s": start_time_s,
@@ -131,10 +123,6 @@ def simulate_earliest_transmission(link_df, tx_power_dbm):
 # POLICY 2
 #
 # FIND THE SHORTEST CONTIGUOUS WINDOW THAT CAN SEND 5 MB
-#
-# With fixed TX RF output:
-#
-# minimum TX-on time = minimum electrical energy
 # ============================================================================
 
 def simulate_optimized_transmission(link_df, tx_power_dbm):
@@ -151,21 +139,12 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
 
     power = transmitter_dc_power_w(tx_power_dbm)
 
-    # ------------------------------------------------------------------------
     # Pass cannot carry all 5 MB
-    # ------------------------------------------------------------------------
-
     if total_possible_bits < MESSAGE_SIZE_BITS:
         active = interval_rates > 0
 
-        tx_time_s = np.sum(
-            dt_s[active]
-        )
-
-        energy_j = (
-            power["total_dc_w"]
-            * tx_time_s
-        )
+        tx_time_s = np.sum(dt_s[active])
+        energy_j = power["total_dc_w"] * tx_time_s
 
         if np.any(active):
             active_indices = np.where(active)[0]
@@ -207,10 +186,7 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
             "energy_wh": energy_j / 3600.0,
         }
 
-    # ------------------------------------------------------------------------
     # Find shortest contiguous window whose integrated capacity >= 5 MB
-    # ------------------------------------------------------------------------
-
     best = None
 
     left = 0
@@ -241,21 +217,10 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
         if left_rate > 0:
             left_trim_s = excess_bits / left_rate
 
-        left_trim_s = min(
-            left_trim_s,
-            dt_s[left],
-        )
+        left_trim_s = min(left_trim_s, dt_s[left])
 
-        candidate_duration_s = (
-            window_duration_s
-            - left_trim_s
-        )
-
-        candidate_start_s = (
-            times[left]
-            + left_trim_s
-        )
-
+        candidate_duration_s = window_duration_s - left_trim_s
+        candidate_start_s = times[left] + left_trim_s
         candidate_end_s = times[right + 1]
 
         # Try trimming excess from right side
@@ -263,21 +228,14 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
 
         if right_rate > 0 and excess_bits <= interval_bits[right]:
             right_trim_s = excess_bits / right_rate
-
-            right_duration_s = (
-                window_duration_s
-                - right_trim_s
-            )
+            right_duration_s = window_duration_s - right_trim_s
 
             if right_duration_s < candidate_duration_s:
                 candidate_duration_s = right_duration_s
                 candidate_start_s = times[left]
                 candidate_end_s = times[right + 1] - right_trim_s
 
-        if (
-            best is None
-            or candidate_duration_s < best["duration_s"]
-        ):
+        if best is None or candidate_duration_s < best["duration_s"]:
             best = {
                 "duration_s": candidate_duration_s,
                 "start_time_s": candidate_start_s,
@@ -300,10 +258,7 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
         end_time_s,
     )
 
-    energy_j = (
-        power["total_dc_w"]
-        * tx_time_s
-    )
+    energy_j = power["total_dc_w"] * tx_time_s
 
     return {
         "completed": True,
@@ -324,6 +279,11 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
 # ============================================================================
 
 def main():
+    DATA_OUTPUT_DIRECTORY.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
     timescale, satellite, ground_station = create_orbit_context()
 
     passes = find_passes(
@@ -337,12 +297,10 @@ def main():
             "No passes were found in the configured search window."
         )
 
-    pass_summary_df = passes_to_dataframe(
-        passes
-    )
+    pass_summary_df = passes_to_dataframe(passes)
 
     pass_summary_df.to_csv(
-        "actual_passes.csv",
+        DATA_OUTPUT_DIRECTORY / "actual_passes.csv",
         index=False,
     )
 
@@ -351,25 +309,15 @@ def main():
         "============================================================"
     )
 
-    print(
-        "ARGUS S-BAND WHOLE-PASS LINK + ENERGY MODEL"
-    )
+    print("ARGUS S-BAND WHOLE-PASS LINK + ENERGY MODEL")
 
     print(
         "============================================================"
     )
 
     print("\nGround station:")
-
-    print(
-        f"  Latitude:  "
-        f"{GROUND_STATION_LAT_DEG:.6f} deg"
-    )
-
-    print(
-        f"  Longitude: "
-        f"{GROUND_STATION_LON_DEG:.6f} deg"
-    )
+    print(f"  Latitude:  {GROUND_STATION_LAT_DEG:.6f} deg")
+    print(f"  Longitude: {GROUND_STATION_LON_DEG:.6f} deg")
 
     print(
         f"\nPass search window: "
@@ -381,9 +329,7 @@ def main():
         f"{len(passes)}"
     )
 
-    print(
-        "\nActual predicted passes:"
-    )
+    print("\nActual predicted passes:")
 
     print(
         pass_summary_df.to_string(
@@ -392,7 +338,7 @@ def main():
     )
 
     # ========================================================================
-    # Use highest-elevation real pass for rate-vs-elevation plots
+    # USE HIGHEST-ELEVATION REAL PASS FOR RATE-VS-ELEVATION PLOTS
     # ========================================================================
 
     presentation_pass = max(
@@ -431,9 +377,7 @@ def main():
                 link_df["sat_antenna_gain_dbi"] = sat_gain_dbi
                 link_df["ground_antenna_gain_dbi"] = ground_gain_dbi
 
-                rate_frames.append(
-                    link_df
-                )
+                rate_frames.append(link_df)
 
     rate_df = pd.concat(
         rate_frames,
@@ -441,7 +385,7 @@ def main():
     )
 
     rate_df.to_csv(
-        "rate_vs_elevation_sweep.csv",
+        DATA_OUTPUT_DIRECTORY / "rate_vs_elevation_sweep.csv",
         index=False,
     )
 
@@ -479,9 +423,7 @@ def main():
                         tx_power_dbm,
                     )
 
-                    power = transmitter_dc_power_w(
-                        tx_power_dbm
-                    )
+                    power = transmitter_dc_power_w(tx_power_dbm)
 
                     energy_saved_pct = np.nan
 
@@ -502,7 +444,9 @@ def main():
                     sweep_rows.append(
                         {
                             "pass_id": pass_info["pass_id"],
-                            "rise_utc": pass_info["rise_time"].utc_datetime().isoformat(),
+                            "rise_utc": pass_info[
+                                "rise_time"
+                            ].utc_datetime().isoformat(),
                             "max_elevation_deg": pass_info["max_elevation_deg"],
                             "pass_duration_min": pass_info["duration_s"] / 60.0,
                             "tx_power_dbm": tx_power_dbm,
@@ -510,33 +454,34 @@ def main():
                             "ground_antenna_gain_dbi": ground_gain_dbi,
                             "total_tx_dc_w": power["total_dc_w"],
                             "pa_dc_w": power["pa_dc_w"],
-
-                            # Earliest-start policy
                             "earliest_completed": earliest["completed"],
                             "earliest_payload_sent_mb": earliest["payload_sent_mb"],
                             "earliest_tx_time_min": earliest["tx_time_min"],
-                            "earliest_start_elevation_deg": earliest["start_elevation_deg"],
-                            "earliest_end_elevation_deg": earliest["end_elevation_deg"],
+                            "earliest_start_elevation_deg": earliest[
+                                "start_elevation_deg"
+                            ],
+                            "earliest_end_elevation_deg": earliest[
+                                "end_elevation_deg"
+                            ],
                             "earliest_energy_wh": earliest["energy_wh"],
-
-                            # Energy-optimized policy
                             "optimized_completed": optimized["completed"],
                             "optimized_payload_sent_mb": optimized["payload_sent_mb"],
                             "optimized_tx_time_min": optimized["tx_time_min"],
-                            "optimized_start_elevation_deg": optimized["start_elevation_deg"],
-                            "optimized_end_elevation_deg": optimized["end_elevation_deg"],
+                            "optimized_start_elevation_deg": optimized[
+                                "start_elevation_deg"
+                            ],
+                            "optimized_end_elevation_deg": optimized[
+                                "end_elevation_deg"
+                            ],
                             "optimized_energy_wh": optimized["energy_wh"],
-
                             "energy_saved_pct": energy_saved_pct,
                         }
                     )
 
-    sweep_df = pd.DataFrame(
-        sweep_rows
-    )
+    sweep_df = pd.DataFrame(sweep_rows)
 
     sweep_df.to_csv(
-        "pass_energy_sweep.csv",
+        DATA_OUTPUT_DIRECTORY / "pass_energy_sweep.csv",
         index=False,
     )
 
@@ -545,7 +490,7 @@ def main():
     ].copy()
 
     feasible_df.to_csv(
-        "feasible_energy_designs.csv",
+        DATA_OUTPUT_DIRECTORY / "feasible_energy_designs.csv",
         index=False,
     )
 
@@ -553,13 +498,8 @@ def main():
     # PLOTS
     # ========================================================================
 
-    make_rate_plots(
-        rate_df
-    )
-
-    make_pass_plots(
-        sweep_df
-    )
+    make_rate_plots(rate_df)
+    make_pass_plots(sweep_df)
 
     # ========================================================================
     # SUMMARY
@@ -582,34 +522,12 @@ def main():
             .iloc[0]
         )
 
-        print(
-            "\nLowest-energy successful case:"
-        )
-
-        print(
-            f"  Pass ID: "
-            f"{int(best['pass_id'])}"
-        )
-
-        print(
-            f"  Peak elevation: "
-            f"{best['max_elevation_deg']:.1f} deg"
-        )
-
-        print(
-            f"  TX RF power: "
-            f"{best['tx_power_dbm']:.1f} dBm"
-        )
-
-        print(
-            f"  Satellite gain: "
-            f"{best['sat_antenna_gain_dbi']:.1f} dBi"
-        )
-
-        print(
-            f"  Ground gain: "
-            f"{best['ground_antenna_gain_dbi']:.1f} dBi"
-        )
+        print("\nLowest-energy successful case:")
+        print(f"  Pass ID: {int(best['pass_id'])}")
+        print(f"  Peak elevation: {best['max_elevation_deg']:.1f} deg")
+        print(f"  TX RF power: {best['tx_power_dbm']:.1f} dBm")
+        print(f"  Satellite gain: {best['sat_antenna_gain_dbi']:.1f} dBi")
+        print(f"  Ground gain: {best['ground_antenna_gain_dbi']:.1f} dBi")
 
         print(
             f"  Optimized start elevation: "
@@ -637,25 +555,11 @@ def main():
                 f"{best['energy_saved_pct']:.1f}%"
             )
 
-    print(
-        "\nFiles written:"
-    )
-
-    print(
-        "  actual_passes.csv"
-    )
-
-    print(
-        "  rate_vs_elevation_sweep.csv"
-    )
-
-    print(
-        "  pass_energy_sweep.csv"
-    )
-
-    print(
-        "  feasible_energy_designs.csv"
-    )
+    print("\nFiles written:")
+    print(f"  {DATA_OUTPUT_DIRECTORY / 'actual_passes.csv'}")
+    print(f"  {DATA_OUTPUT_DIRECTORY / 'rate_vs_elevation_sweep.csv'}")
+    print(f"  {DATA_OUTPUT_DIRECTORY / 'pass_energy_sweep.csv'}")
+    print(f"  {DATA_OUTPUT_DIRECTORY / 'feasible_energy_designs.csv'}")
 
 
 if __name__ == "__main__":

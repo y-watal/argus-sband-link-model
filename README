@@ -1,0 +1,155 @@
+# ARGUS S-Band Downlink Model
+
+This repository contains a preliminary link and energy model for the ARGUS S-band image downlink.
+
+The goal of the model is to answer questions such as:
+
+* When is the satellite visible from the ground station?
+* What elevation and slant range does the satellite have throughout a pass?
+* What SX1280 data rate can be supported at each point in the pass?
+* Can a 5 MB payload be transmitted during a pass?
+* How long does the transmitter need to remain active?
+* How much electrical energy does the transmission consume?
+* Is it more energy efficient to begin transmitting immediately or wait for the higher-data-rate portion of the pass?
+* How do satellite antenna gain, ground antenna gain, and transmit power affect the result?
+
+The model is currently intended for preliminary design-space exploration. It is not yet a final flight link-budget or spacecraft power model.
+
+---
+
+## Repository Structure
+
+```text
+.
+├── README.md
+├── requirements.txt
+├── src/
+│   ├── config.py
+│   ├── main.py
+│   ├── orbit_geometry.py
+│   ├── plotting.py
+│   ├── power_model.py
+│   └── radio_link.py
+└── output/
+    ├── data/
+    └── plots/
+```
+
+The `output/` directory is generated automatically when the model runs and is not tracked by Git.
+
+---
+
+# Overall Model Flow
+
+The model follows this pipeline:
+
+```text
+Ground-station location + satellite TLE
+                    |
+                    v
+            Orbit propagation
+                    |
+                    v
+       Actual ground-station passes
+                    |
+                    v
+      Elevation and range vs time
+                    |
+                    v
+            Free-space path loss
+                    |
+                    v
+TX power + satellite gain + ground gain
+                    |
+                    v
+             Received RF power
+                    |
+                    v
+        Fastest viable SX1280 mode
+                    |
+                    v
+             Data rate vs time
+                    |
+                    v
+          5 MB transmission model
+                 /       \
+                /         \
+      transmit ASAP    optimized window
+                \         /
+                 \       /
+                    v
+               TX-on time
+                    |
+                    v
+          SX1280 + PA DC power
+                    |
+                    v
+          Total transmission energy
+```
+
+The model therefore combines three main pieces:
+
+1. Orbital geometry
+2. RF link performance
+3. Electrical energy consumption
+
+---
+
+# Files
+
+## `src/config.py`
+
+This file contains the major model inputs and design assumptions.
+
+It is the main place to change parameters without modifying the calculation logic.
+
+Current configuration includes:
+
+### Ground station
+
+The tentative ground-station coordinates are:
+
+```text
+Latitude:  40.442144 degrees
+Longitude: -79.945850 degrees
+```
+
+The ground-station location is used with the satellite orbit to calculate actual predicted passes instead of arbitrarily sweeping maximum pass elevation.
+
+### Satellite orbit
+
+The model currently uses a representative Transporter-17 TLE.
+
+The TLE determines the satellite position over time and is used to calculate when the satellite rises above the ground-station horizon, reaches maximum elevation, and sets again.
+
+The TLE should eventually be replaced with the actual ARGUS orbit when it becomes available.
+
+### Payload
+
+The current payload requirement is:
+
+```text
+5 MB
+```
+
+This is treated as 5 MB of data that must be delivered to the ground station.
+
+It may eventually represent one compressed image or multiple compressed images.
+
+### Hardware sweep
+
+The model currently sweeps:
+
+* RF transmit power
+* Satellite antenna gain
+* Ground antenna gain
+
+Unlike the earlier version of the model, maximum pass elevation is no longer swept manually.
+
+It is calculated from the actual predicted orbit and ground-station geometry.
+
+### Link assumptions
+
+The configuration also contains preliminary values for:
+
+* Pointing loss

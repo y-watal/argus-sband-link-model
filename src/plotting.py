@@ -3,7 +3,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-from overhead_pass_model.src.config import (
+from config import (
     TX_POWER_DBM_OPTIONS,
     SAT_ANTENNA_GAIN_DBI_OPTIONS,
     GROUND_ANTENNA_GAIN_DBI_OPTIONS,
@@ -19,10 +19,7 @@ from overhead_pass_model.src.config import (
 # ============================================================================
 
 def make_rate_plots(rate_df):
-    os.makedirs(
-        RATE_PLOT_DIRECTORY,
-        exist_ok=True,
-    )
+    os.makedirs(RATE_PLOT_DIRECTORY, exist_ok=True)
 
     for sat_gain_dbi in SAT_ANTENNA_GAIN_DBI_OPTIONS:
         for ground_gain_dbi in GROUND_ANTENNA_GAIN_DBI_OPTIONS:
@@ -61,10 +58,7 @@ def make_rate_plots(rate_df):
             )
 
             plt.savefig(
-                os.path.join(
-                    RATE_PLOT_DIRECTORY,
-                    filename,
-                ),
+                RATE_PLOT_DIRECTORY / filename,
                 dpi=300,
             )
 
@@ -83,10 +77,7 @@ def make_pass_metric_plots(
     title_prefix,
     successful_only=False,
 ):
-    os.makedirs(
-        output_directory,
-        exist_ok=True,
-    )
+    os.makedirs(output_directory, exist_ok=True)
 
     for sat_gain_dbi in SAT_ANTENNA_GAIN_DBI_OPTIONS:
         for ground_gain_dbi in GROUND_ANTENNA_GAIN_DBI_OPTIONS:
@@ -134,10 +125,7 @@ def make_pass_metric_plots(
             )
 
             plt.savefig(
-                os.path.join(
-                    output_directory,
-                    filename,
-                ),
+                output_directory / filename,
                 dpi=300,
             )
 

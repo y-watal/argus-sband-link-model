@@ -1,3 +1,22 @@
+from pathlib import Path
+
+
+# ============================================================================
+# PROJECT PATHS
+# ============================================================================
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+OUTPUT_DIRECTORY = PROJECT_ROOT / "output"
+DATA_OUTPUT_DIRECTORY = OUTPUT_DIRECTORY / "data"
+PLOTS_OUTPUT_DIRECTORY = OUTPUT_DIRECTORY / "plots"
+
+RATE_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "rate_vs_elevation"
+ENERGY_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "energy_vs_pass_elevation"
+PAYLOAD_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "payload_vs_pass_elevation"
+TX_TIME_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "tx_time_vs_pass_elevation"
+
+
 # ============================================================================
 # GROUND STATION
 # ============================================================================
@@ -13,7 +32,6 @@ GROUND_STATION_ELEVATION_M = 0.0
 # REPRESENTATIVE TRANSPORTER-17 ORBIT
 #
 # NORAD 69909
-# Public TLE epoch: 2026-09-12
 # ============================================================================
 
 TLE_NAME = "TRANSPORTER-17 OBJECT AS / NORAD 69909"
@@ -29,9 +47,7 @@ TLE_LINE2 = "2 69909 97.7460 155.2608 0003940 282.9568 77.1211 14.91498474 10080
 PASS_SEARCH_START_UTC = "2026-09-12T23:15:55+00:00"
 PASS_SEARCH_HOURS = 48.0
 
-# Geometric horizon
 PASS_HORIZON_DEG = 0.0
-
 PASS_SAMPLE_STEP_S = 1.0
 
 
@@ -76,19 +92,8 @@ SX1280_SUPPLY_VOLTAGE_V = 3.3
 SX1280_TX_CURRENT_A = 0.024
 SX1280_DC_POWER_W = SX1280_SUPPLY_VOLTAGE_V * SX1280_TX_CURRENT_A
 
-# Preliminary assumption
 PA_EFFICIENCY = 0.35
 
-# Add these when known
+# Add when known
 MAINBOARD_MCU_TX_POWER_W = 0.0
 OTHER_TX_ELECTRONICS_POWER_W = 0.0
-
-
-# ============================================================================
-# OUTPUT DIRECTORIES
-# ============================================================================
-
-RATE_PLOT_DIRECTORY = "plots_rate_vs_elevation"
-ENERGY_PLOT_DIRECTORY = "plots_energy_vs_max_elevation"
-PAYLOAD_PLOT_DIRECTORY = "plots_payload_sent_vs_max_elevation"
-TX_TIME_PLOT_DIRECTORY = "plots_tx_time_vs_max_elevation"
