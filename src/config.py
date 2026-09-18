@@ -1,0 +1,94 @@
+# ============================================================================
+# GROUND STATION
+# ============================================================================
+
+GROUND_STATION_LAT_DEG = 40.442144
+GROUND_STATION_LON_DEG = -79.945850
+
+# Replace this if an accurate ground-station elevation becomes available
+GROUND_STATION_ELEVATION_M = 0.0
+
+
+# ============================================================================
+# REPRESENTATIVE TRANSPORTER-17 ORBIT
+#
+# NORAD 69909
+# Public TLE epoch: 2026-09-12
+# ============================================================================
+
+TLE_NAME = "TRANSPORTER-17 OBJECT AS / NORAD 69909"
+
+TLE_LINE1 = "1 69909U 26156AS 26255.96938999 .00000649 00000-0 70414-4 0 9994"
+TLE_LINE2 = "2 69909 97.7460 155.2608 0003940 282.9568 77.1211 14.91498474 10080"
+
+
+# ============================================================================
+# PASS SEARCH
+# ============================================================================
+
+PASS_SEARCH_START_UTC = "2026-09-12T23:15:55+00:00"
+PASS_SEARCH_HOURS = 48.0
+
+# Geometric horizon
+PASS_HORIZON_DEG = 0.0
+
+PASS_SAMPLE_STEP_S = 1.0
+
+
+# ============================================================================
+# RF / PAYLOAD
+# ============================================================================
+
+DOWNLINK_FREQUENCY_MHZ = 2425.0
+
+MESSAGE_SIZE_MB = 5.0
+MESSAGE_SIZE_BITS = MESSAGE_SIZE_MB * 1e6 * 8.0
+
+
+# ============================================================================
+# HARDWARE SWEEPS
+# ============================================================================
+
+TX_POWER_DBM_OPTIONS = [12.5, 20.0, 23.0, 27.0, 30.0]
+
+SAT_ANTENNA_GAIN_DBI_OPTIONS = [0.0, 3.0, 6.0, 9.0]
+
+GROUND_ANTENNA_GAIN_DBI_OPTIONS = [10.0, 15.0, 20.0, 25.0, 30.0]
+
+
+# ============================================================================
+# LINK ASSUMPTIONS
+# ============================================================================
+
+POINTING_LOSS_DB = 0.0
+OTHER_RF_LOSS_DB = 0.0
+LINK_MARGIN_DB = 0.0
+PROTOCOL_EFFICIENCY = 1.0
+
+
+# ============================================================================
+# ELECTRICAL POWER MODEL
+# ============================================================================
+
+SX1280_MAX_RF_OUTPUT_DBM = 12.5
+
+SX1280_SUPPLY_VOLTAGE_V = 3.3
+SX1280_TX_CURRENT_A = 0.024
+SX1280_DC_POWER_W = SX1280_SUPPLY_VOLTAGE_V * SX1280_TX_CURRENT_A
+
+# Preliminary assumption
+PA_EFFICIENCY = 0.35
+
+# Add these when known
+MAINBOARD_MCU_TX_POWER_W = 0.0
+OTHER_TX_ELECTRONICS_POWER_W = 0.0
+
+
+# ============================================================================
+# OUTPUT DIRECTORIES
+# ============================================================================
+
+RATE_PLOT_DIRECTORY = "plots_rate_vs_elevation"
+ENERGY_PLOT_DIRECTORY = "plots_energy_vs_max_elevation"
+PAYLOAD_PLOT_DIRECTORY = "plots_payload_sent_vs_max_elevation"
+TX_TIME_PLOT_DIRECTORY = "plots_tx_time_vs_max_elevation"

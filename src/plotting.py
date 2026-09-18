@@ -1,0 +1,177 @@
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+from overhead_pass_model.src.config import (
+    TX_POWER_DBM_OPTIONS,
+    SAT_ANTENNA_GAIN_DBI_OPTIONS,
+    GROUND_ANTENNA_GAIN_DBI_OPTIONS,
+    RATE_PLOT_DIRECTORY,
+    ENERGY_PLOT_DIRECTORY,
+    PAYLOAD_PLOT_DIRECTORY,
+    TX_TIME_PLOT_DIRECTORY,
+)
+
+
+# ============================================================================
+# RATE VS ELEVATION
+# ============================================================================
+
+def make_rate_plots(rate_df):
+    os.makedirs(
+        RATE_PLOT_DIRECTORY,
+        exist_ok=True,
+    )
+
+    for sat_gain_dbi in SAT_ANTENNA_GAIN_DBI_OPTIONS:
+        for ground_gain_dbi in GROUND_ANTENNA_GAIN_DBI_OPTIONS:
+            plt.figure(figsize=(10, 6))
+
+            for tx_power_dbm in TX_POWER_DBM_OPTIONS:
+                df = rate_df[
+                    (rate_df["sat_antenna_gain_dbi"] == sat_gain_dbi)
+                    & (rate_df["ground_antenna_gain_dbi"] == ground_gain_dbi)
+                    & (rate_df["tx_power_dbm"] == tx_power_dbm)
+                ]
+
+                plt.step(
+                    df["elevation_deg"],
+                    df["useful_rate_kbps"],
+                    where="post",
+                    label=f"{tx_power_dbm:g} dBm",
+                )
+
+            plt.xlabel("Satellite Elevation (deg)")
+            plt.ylabel("Maximum Supported Payload Rate (kbps)")
+
+            plt.title(
+                "SX1280 Data Rate vs Elevation\n"
+                f"Satellite Gain = {sat_gain_dbi:g} dBi, "
+                f"Ground Gain = {ground_gain_dbi:g} dBi"
+            )
+
+            plt.grid(True, alpha=0.3)
+            plt.legend()
+            plt.tight_layout()
+
+            filename = (
+                f"sat_{sat_gain_dbi:g}dBi_"
+                f"ground_{ground_gain_dbi:g}dBi.png"
+            )
+
+            plt.savefig(
+                os.path.join(
+                    RATE_PLOT_DIRECTORY,
+                    filename,
+                ),
+                dpi=300,
+            )
+
+            plt.close()
+
+
+# ============================================================================
+# GENERIC ACTUAL-PASS METRIC PLOT
+# ============================================================================
+
+def make_pass_metric_plots(
+    sweep_df,
+    output_directory,
+    y_column,
+    ylabel,
+    title_prefix,
+    successful_only=False,
+):
+    os.makedirs(
+        output_directory,
+        exist_ok=True,
+    )
+
+    for sat_gain_dbi in SAT_ANTENNA_GAIN_DBI_OPTIONS:
+        for ground_gain_dbi in GROUND_ANTENNA_GAIN_DBI_OPTIONS:
+            plt.figure(figsize=(10, 6))
+
+            for tx_power_dbm in TX_POWER_DBM_OPTIONS:
+                df = sweep_df[
+                    (sweep_df["sat_antenna_gain_dbi"] == sat_gain_dbi)
+                    & (sweep_df["ground_antenna_gain_dbi"] == ground_gain_dbi)
+                    & (sweep_df["tx_power_dbm"] == tx_power_dbm)
+                ].sort_values("max_elevation_deg")
+
+                if successful_only:
+                    y_values = np.where(
+                        df["optimized_completed"],
+                        df[y_column],
+                        np.nan,
+                    )
+                else:
+                    y_values = df[y_column]
+
+                plt.plot(
+                    df["max_elevation_deg"],
+                    y_values,
+                    marker="o",
+                    label=f"{tx_power_dbm:g} dBm",
+                )
+
+            plt.xlabel("Actual Peak Elevation of Predicted Pass (deg)")
+            plt.ylabel(ylabel)
+
+            plt.title(
+                f"{title_prefix}\n"
+                f"Satellite Gain = {sat_gain_dbi:g} dBi, "
+                f"Ground Gain = {ground_gain_dbi:g} dBi"
+            )
+
+            plt.grid(True, alpha=0.3)
+            plt.legend()
+            plt.tight_layout()
+
+            filename = (
+                f"sat_{sat_gain_dbi:g}dBi_"
+                f"ground_{ground_gain_dbi:g}dBi.png"
+            )
+
+            plt.savefig(
+                os.path.join(
+                    output_directory,
+                    filename,
+                ),
+                dpi=300,
+            )
+
+            plt.close()
+
+
+# ============================================================================
+# ALL ACTUAL-PASS PLOTS
+# ============================================================================
+
+def make_pass_plots(sweep_df):
+    make_pass_metric_plots(
+        sweep_df,
+        ENERGY_PLOT_DIRECTORY,
+        "optimized_energy_wh",
+        "Electrical Energy to Send 5 MB (Wh)",
+        "Optimized 5 MB Downlink Energy",
+        successful_only=True,
+    )
+
+    make_pass_metric_plots(
+        sweep_df,
+        PAYLOAD_PLOT_DIRECTORY,
+        "optimized_payload_sent_mb",
+        "Payload Transmitted (MB)",
+        "Payload Delivered During Predicted Pass",
+        successful_only=False,
+    )
+
+    make_pass_metric_plots(
+        sweep_df,
+        TX_TIME_PLOT_DIRECTORY,
+        "optimized_tx_time_min",
+        "TX-On Time to Send 5 MB (min)",
+        "Optimized 5 MB Transmission Time",
+        successful_only=True,
+    )
