@@ -11,6 +11,7 @@ from config import (
     ENERGY_PLOT_DIRECTORY,
     PAYLOAD_PLOT_DIRECTORY,
     TX_TIME_PLOT_DIRECTORY,
+    HARDWARE_TRADE_PLOT_DIRECTORY,
 )
 
 
@@ -66,7 +67,7 @@ def make_rate_plots(rate_df):
 
 
 # ============================================================================
-# GENERIC ACTUAL-PASS METRIC PLOT
+# GENERIC PASS METRIC PLOT
 # ============================================================================
 
 def make_pass_metric_plots(
@@ -133,7 +134,7 @@ def make_pass_metric_plots(
 
 
 # ============================================================================
-# ALL ACTUAL-PASS PLOTS
+# PASS PLOTS
 # ============================================================================
 
 def make_pass_plots(sweep_df):
@@ -141,8 +142,8 @@ def make_pass_plots(sweep_df):
         sweep_df,
         ENERGY_PLOT_DIRECTORY,
         "optimized_energy_wh",
-        "Electrical Energy to Send 5 MB (Wh)",
-        "Optimized 5 MB Downlink Energy",
+        "Electrical Energy to Send Payload (Wh)",
+        "Optimized Downlink Energy",
         successful_only=True,
     )
 
@@ -159,7 +160,56 @@ def make_pass_plots(sweep_df):
         sweep_df,
         TX_TIME_PLOT_DIRECTORY,
         "optimized_tx_time_min",
-        "TX-On Time to Send 5 MB (min)",
-        "Optimized 5 MB Transmission Time",
+        "TX-On Time (min)",
+        "Optimized Transmission Time",
         successful_only=True,
     )
+
+
+# ============================================================================
+# HARDWARE TRADE PLOT
+#
+# Shows the minimum required ground antenna gain for each combination of
+# satellite antenna gain and PA output power
+# ============================================================================
+
+def make_hardware_trade_plot(minimum_ground_gain_df):
+    os.makedirs(HARDWARE_TRADE_PLOT_DIRECTORY, exist_ok=True)
+
+    if minimum_ground_gain_df.empty:
+        return
+
+    plt.figure(figsize=(10, 6))
+
+    for tx_power_dbm in sorted(
+        minimum_ground_gain_df["tx_power_dbm"].unique()
+    ):
+        df = minimum_ground_gain_df[
+            minimum_ground_gain_df["tx_power_dbm"] == tx_power_dbm
+        ].sort_values("sat_antenna_gain_dbi")
+
+        plt.plot(
+            df["sat_antenna_gain_dbi"],
+            df["minimum_ground_antenna_gain_dbi"],
+            marker="o",
+            label=f"{tx_power_dbm:g} dBm TX",
+        )
+
+    plt.xlabel("Satellite Antenna Gain (dBi)")
+    plt.ylabel("Minimum Required Ground Antenna Gain (dBi)")
+
+    plt.title(
+        "Antenna Gain Trade for Successful Payload Downlink"
+    )
+
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(
+        HARDWARE_TRADE_PLOT_DIRECTORY
+        / "minimum_ground_gain_vs_satellite_gain.png",
+        dpi=300,
+    )
+
+    plt.close()

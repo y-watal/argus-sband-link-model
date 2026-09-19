@@ -15,6 +15,7 @@ RATE_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "rate_vs_elevation"
 ENERGY_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "energy_vs_pass_elevation"
 PAYLOAD_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "payload_vs_pass_elevation"
 TX_TIME_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "tx_time_vs_pass_elevation"
+HARDWARE_TRADE_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "hardware_trade"
 
 
 # ============================================================================
@@ -52,24 +53,60 @@ PASS_SAMPLE_STEP_S = 1.0
 
 
 # ============================================================================
-# RF / PAYLOAD
+# MISSION REQUIREMENT
 # ============================================================================
-
-DOWNLINK_FREQUENCY_MHZ = 2425.0
 
 MESSAGE_SIZE_MB = 5.0
 MESSAGE_SIZE_BITS = MESSAGE_SIZE_MB * 1e6 * 8.0
+
+# Preliminary design requirement
+# Hardware must successfully downlink the message on every modeled pass
+# whose maximum elevation is at least this value
+DESIGN_MIN_PEAK_ELEVATION_DEG = 30.0
+
+
+# ============================================================================
+# PRELIMINARY SPACECRAFT POWER CONSTRAINT
+# ============================================================================
+
+# Maximum additional electrical power allocated to the S-band TX chain
+# This is a planning value and should later be confirmed with the EPS team
+MAX_S_BAND_TX_POWER_W = 3.0
 
 
 # ============================================================================
 # HARDWARE SWEEPS
 # ============================================================================
 
-TX_POWER_DBM_OPTIONS = [12.5, 20.0, 23.0, 27.0, 30.0]
+TX_POWER_DBM_OPTIONS = [
+    12.5,
+    20.0,
+    23.0,
+    27.0,
+    30.0,
+]
 
-SAT_ANTENNA_GAIN_DBI_OPTIONS = [0.0, 3.0, 6.0, 9.0]
+SAT_ANTENNA_GAIN_DBI_OPTIONS = [
+    0.0,
+    3.0,
+    6.0,
+    9.0,
+]
 
-GROUND_ANTENNA_GAIN_DBI_OPTIONS = [10.0, 15.0, 20.0, 25.0, 30.0]
+GROUND_ANTENNA_GAIN_DBI_OPTIONS = [
+    10.0,
+    15.0,
+    20.0,
+    25.0,
+    30.0,
+]
+
+
+# ============================================================================
+# RF
+# ============================================================================
+
+DOWNLINK_FREQUENCY_MHZ = 2425.0
 
 
 # ============================================================================
@@ -92,6 +129,7 @@ SX1280_SUPPLY_VOLTAGE_V = 3.3
 SX1280_TX_CURRENT_A = 0.024
 SX1280_DC_POWER_W = SX1280_SUPPLY_VOLTAGE_V * SX1280_TX_CURRENT_A
 
+# Preliminary external PA efficiency
 PA_EFFICIENCY = 0.35
 
 # Add when known

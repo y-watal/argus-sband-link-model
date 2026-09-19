@@ -11,6 +11,8 @@ from config import (
     GROUND_STATION_LAT_DEG,
     GROUND_STATION_LON_DEG,
     PASS_SEARCH_HOURS,
+    DESIGN_MIN_PEAK_ELEVATION_DEG,
+    MAX_S_BAND_TX_POWER_W,
 )
 
 from orbit_geometry import (
@@ -22,7 +24,19 @@ from orbit_geometry import (
 
 from radio_link import build_link_timeline
 from power_model import transmitter_dc_power_w
-from plotting import make_rate_plots, make_pass_plots
+
+from design_trade import (
+    build_hardware_trade_summary,
+    build_minimum_ground_gain_table,
+    build_pass_hardware_results,
+    build_hardware_coverage_summary,
+)
+
+from plotting import (
+    make_rate_plots,
+    make_pass_plots,
+    make_hardware_trade_plot,
+)
 
 
 # ============================================================================
@@ -122,7 +136,7 @@ def simulate_earliest_transmission(link_df, tx_power_dbm):
 # ============================================================================
 # POLICY 2
 #
-# FIND THE SHORTEST CONTIGUOUS WINDOW THAT CAN SEND 5 MB
+# FIND THE SHORTEST CONTIGUOUS WINDOW THAT CAN SEND THE PAYLOAD
 # ============================================================================
 
 def simulate_optimized_transmission(link_df, tx_power_dbm):
@@ -139,7 +153,6 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
 
     power = transmitter_dc_power_w(tx_power_dbm)
 
-    # Pass cannot carry all 5 MB
     if total_possible_bits < MESSAGE_SIZE_BITS:
         active = interval_rates > 0
 
@@ -186,7 +199,6 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
             "energy_wh": energy_j / 3600.0,
         }
 
-    # Find shortest contiguous window whose integrated capacity >= 5 MB
     best = None
 
     left = 0
@@ -210,7 +222,6 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
 
         excess_bits = window_bits - MESSAGE_SIZE_BITS
 
-        # Try trimming excess from left side
         left_rate = interval_rates[left]
         left_trim_s = 0.0
 
@@ -223,7 +234,6 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
         candidate_start_s = times[left] + left_trim_s
         candidate_end_s = times[right + 1]
 
-        # Try trimming excess from right side
         right_rate = interval_rates[right]
 
         if right_rate > 0 and excess_bits <= interval_bits[right]:
@@ -309,10 +319,22 @@ def main():
         "============================================================"
     )
 
-    print("ARGUS S-BAND WHOLE-PASS LINK + ENERGY MODEL")
+    print("ARGUS S-BAND HARDWARE TRADE MODEL")
 
     print(
         "============================================================"
+    )
+
+    print(f"\nPayload requirement: {MESSAGE_SIZE_MB:.2f} MB")
+
+    print(
+        f"Design pass threshold: "
+        f"{DESIGN_MIN_PEAK_ELEVATION_DEG:.1f} deg peak elevation"
+    )
+
+    print(
+        f"S-band TX power limit: "
+        f"{MAX_S_BAND_TX_POWER_W:.2f} W"
     )
 
     print("\nGround station:")
@@ -320,25 +342,13 @@ def main():
     print(f"  Longitude: {GROUND_STATION_LON_DEG:.6f} deg")
 
     print(
-        f"\nPass search window: "
-        f"{PASS_SEARCH_HOURS:.1f} hours"
-    )
-
-    print(
-        f"Predicted passes found: "
+        f"\nPredicted passes found in "
+        f"{PASS_SEARCH_HOURS:.1f} hours: "
         f"{len(passes)}"
     )
 
-    print("\nActual predicted passes:")
-
-    print(
-        pass_summary_df.to_string(
-            index=False
-        )
-    )
-
     # ========================================================================
-    # USE HIGHEST-ELEVATION REAL PASS FOR RATE-VS-ELEVATION PLOTS
+    # HIGHEST-ELEVATION PASS FOR RATE PLOTS
     # ========================================================================
 
     presentation_pass = max(
@@ -390,7 +400,7 @@ def main():
     )
 
     # ========================================================================
-    # ACTUAL PASS + HARDWARE SWEEP
+    # EVERY PASS × EVERY HARDWARE COMBINATION
     # ========================================================================
 
     sweep_rows = []
@@ -485,12 +495,60 @@ def main():
         index=False,
     )
 
-    feasible_df = sweep_df[
-        sweep_df["optimized_completed"]
+    # ========================================================================
+    # PASS-LEVEL HARDWARE TABLE
+    # ========================================================================
+
+    pass_hardware_df = build_pass_hardware_results(
+        sweep_df
+    )
+
+    pass_hardware_df.to_csv(
+        DATA_OUTPUT_DIRECTORY / "pass_hardware_results.csv",
+        index=False,
+    )
+
+    # ========================================================================
+    # HARDWARE COVERAGE ACROSS ALL ACTUAL PASS ANGLES
+    # ========================================================================
+
+    hardware_coverage_df = build_hardware_coverage_summary(
+        sweep_df
+    )
+
+    hardware_coverage_df.to_csv(
+        DATA_OUTPUT_DIRECTORY / "hardware_coverage_summary.csv",
+        index=False,
+    )
+
+    # ========================================================================
+    # 30 DEGREE DESIGN REQUIREMENT SUMMARY
+    # ========================================================================
+
+    hardware_trade_df = build_hardware_trade_summary(
+        sweep_df
+    )
+
+    hardware_trade_df.to_csv(
+        DATA_OUTPUT_DIRECTORY / "hardware_trade_summary.csv",
+        index=False,
+    )
+
+    feasible_hardware_df = hardware_trade_df[
+        hardware_trade_df["design_valid"]
     ].copy()
 
-    feasible_df.to_csv(
-        DATA_OUTPUT_DIRECTORY / "feasible_energy_designs.csv",
+    feasible_hardware_df.to_csv(
+        DATA_OUTPUT_DIRECTORY / "feasible_hardware_designs.csv",
+        index=False,
+    )
+
+    minimum_ground_gain_df = build_minimum_ground_gain_table(
+        hardware_trade_df
+    )
+
+    minimum_ground_gain_df.to_csv(
+        DATA_OUTPUT_DIRECTORY / "minimum_ground_gain_by_spacecraft_design.csv",
         index=False,
     )
 
@@ -501,65 +559,71 @@ def main():
     make_rate_plots(rate_df)
     make_pass_plots(sweep_df)
 
+    make_hardware_trade_plot(
+        minimum_ground_gain_df
+    )
+
     # ========================================================================
     # SUMMARY
     # ========================================================================
 
+    design_passes = pass_summary_df[
+        pass_summary_df["max_elevation_deg"]
+        >= DESIGN_MIN_PEAK_ELEVATION_DEG
+    ]
+
     print(
-        f"\nTotal pass/hardware combinations tested: "
-        f"{len(sweep_df)}"
+        f"\nPasses satisfying >= "
+        f"{DESIGN_MIN_PEAK_ELEVATION_DEG:.1f} deg threshold: "
+        f"{len(design_passes)}"
     )
 
     print(
-        f"Configurations that can send all 5 MB: "
-        f"{len(feasible_df)}"
+        f"Hardware combinations tested: "
+        f"{len(hardware_trade_df)}"
     )
 
-    if not feasible_df.empty:
-        best = (
-            feasible_df
-            .sort_values("optimized_energy_wh")
-            .iloc[0]
-        )
+    print(
+        f"Hardware combinations satisfying both link and power requirements: "
+        f"{len(feasible_hardware_df)}"
+    )
 
-        print("\nLowest-energy successful case:")
-        print(f"  Pass ID: {int(best['pass_id'])}")
-        print(f"  Peak elevation: {best['max_elevation_deg']:.1f} deg")
-        print(f"  TX RF power: {best['tx_power_dbm']:.1f} dBm")
-        print(f"  Satellite gain: {best['sat_antenna_gain_dbi']:.1f} dBi")
-        print(f"  Ground gain: {best['ground_antenna_gain_dbi']:.1f} dBi")
+    print(
+        "\nFull angle coverage written to:"
+    )
 
+    print(
+        f"  {DATA_OUTPUT_DIRECTORY / 'pass_hardware_results.csv'}"
+    )
+
+    print(
+        f"  {DATA_OUTPUT_DIRECTORY / 'hardware_coverage_summary.csv'}"
+    )
+
+    if not minimum_ground_gain_df.empty:
         print(
-            f"  Optimized start elevation: "
-            f"{best['optimized_start_elevation_deg']:.1f} deg"
-        )
-
-        print(
-            f"  Optimized end elevation: "
-            f"{best['optimized_end_elevation_deg']:.1f} deg"
-        )
-
-        print(
-            f"  TX-on time: "
-            f"{best['optimized_tx_time_min']:.3f} min"
+            "\nMinimum ground antenna gain for each feasible "
+            "spacecraft design:\n"
         )
 
         print(
-            f"  Energy: "
-            f"{best['optimized_energy_wh']:.6f} Wh"
-        )
-
-        if not np.isnan(best["energy_saved_pct"]):
-            print(
-                f"  Energy saved vs immediate transmission: "
-                f"{best['energy_saved_pct']:.1f}%"
+            minimum_ground_gain_df.to_string(
+                index=False
             )
+        )
 
     print("\nFiles written:")
     print(f"  {DATA_OUTPUT_DIRECTORY / 'actual_passes.csv'}")
     print(f"  {DATA_OUTPUT_DIRECTORY / 'rate_vs_elevation_sweep.csv'}")
     print(f"  {DATA_OUTPUT_DIRECTORY / 'pass_energy_sweep.csv'}")
-    print(f"  {DATA_OUTPUT_DIRECTORY / 'feasible_energy_designs.csv'}")
+    print(f"  {DATA_OUTPUT_DIRECTORY / 'pass_hardware_results.csv'}")
+    print(f"  {DATA_OUTPUT_DIRECTORY / 'hardware_coverage_summary.csv'}")
+    print(f"  {DATA_OUTPUT_DIRECTORY / 'hardware_trade_summary.csv'}")
+    print(f"  {DATA_OUTPUT_DIRECTORY / 'feasible_hardware_designs.csv'}")
+    print(
+        f"  "
+        f"{DATA_OUTPUT_DIRECTORY / 'minimum_ground_gain_by_spacecraft_design.csv'}"
+    )
 
 
 if __name__ == "__main__":

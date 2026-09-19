@@ -4,6 +4,7 @@ from config import (
     PA_EFFICIENCY,
     MAINBOARD_MCU_TX_POWER_W,
     OTHER_TX_ELECTRONICS_POWER_W,
+    MAX_S_BAND_TX_POWER_W,
 )
 
 
@@ -44,6 +45,16 @@ def transmitter_dc_power_w(tx_power_dbm):
         "total_dc_w": total_dc_w,
         "pa_used": pa_used,
     }
+
+
+# ============================================================================
+# POWER-BUDGET CHECK
+# ============================================================================
+
+def within_tx_power_budget(tx_power_dbm):
+    power = transmitter_dc_power_w(tx_power_dbm)
+
+    return power["total_dc_w"] <= MAX_S_BAND_TX_POWER_W
 
 
 # ============================================================================
