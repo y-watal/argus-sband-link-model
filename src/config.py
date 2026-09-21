@@ -24,15 +24,11 @@ HARDWARE_TRADE_PLOT_DIRECTORY = PLOTS_OUTPUT_DIRECTORY / "hardware_trade"
 
 GROUND_STATION_LAT_DEG = 40.442144
 GROUND_STATION_LON_DEG = -79.945850
-
-# Replace this if an accurate ground-station elevation becomes available
 GROUND_STATION_ELEVATION_M = 0.0
 
 
 # ============================================================================
-# REPRESENTATIVE TRANSPORTER-17 ORBIT
-#
-# NORAD 69909
+# REPRESENTATIVE ORBIT
 # ============================================================================
 
 TLE_NAME = "TRANSPORTER-17 OBJECT AS / NORAD 69909"
@@ -46,7 +42,7 @@ TLE_LINE2 = "2 69909 97.7460 155.2608 0003940 282.9568 77.1211 14.91498474 10080
 # ============================================================================
 
 PASS_SEARCH_START_UTC = "2026-09-12T23:15:55+00:00"
-PASS_SEARCH_HOURS = 48.0
+PASS_SEARCH_HOURS = 168.0
 
 PASS_HORIZON_DEG = 0.0
 PASS_SAMPLE_STEP_S = 1.0
@@ -56,49 +52,36 @@ PASS_SAMPLE_STEP_S = 1.0
 # MISSION REQUIREMENT
 # ============================================================================
 
-MESSAGE_SIZE_MB = 5.0
+MESSAGE_SIZE_MB = 2.0
 MESSAGE_SIZE_BITS = MESSAGE_SIZE_MB * 1e6 * 8.0
 
-# Preliminary design requirement
-# Hardware must successfully downlink the message on every modeled pass
-# whose maximum elevation is at least this value
-DESIGN_MIN_PEAK_ELEVATION_DEG = 30.0
-
 
 # ============================================================================
-# PRELIMINARY SPACECRAFT POWER CONSTRAINT
-# ============================================================================
-
-# Maximum additional electrical power allocated to the S-band TX chain
-# This is a planning value and should later be confirmed with the EPS team
-MAX_S_BAND_TX_POWER_W = 3.0
-
-
-# ============================================================================
-# HARDWARE SWEEPS
+# HARDWARE SWEEP
+#
+# Spacecraft antenna and TX power are currently fixed
+# Ground antenna gain is being swept
 # ============================================================================
 
 TX_POWER_DBM_OPTIONS = [
-    12.5,
-    20.0,
-    23.0,
-    27.0,
     30.0,
 ]
 
 SAT_ANTENNA_GAIN_DBI_OPTIONS = [
-    0.0,
-    3.0,
-    6.0,
-    9.0,
+    6.3,
 ]
 
 GROUND_ANTENNA_GAIN_DBI_OPTIONS = [
-    10.0,
-    15.0,
     20.0,
-    25.0,
+    22.0,
+    24.0,
+    26.0,
+    26.5,
+    28.0,
     30.0,
+    32.0,
+    34.0,
+    36.0,
 ]
 
 
@@ -110,13 +93,60 @@ DOWNLINK_FREQUENCY_MHZ = 2425.0
 
 
 # ============================================================================
-# LINK ASSUMPTIONS
+# SPACECRAFT POINTING
+#
+# Until we have the actual antenna radiation pattern, spacecraft pointing
+# remains represented by a conservative fixed loss
 # ============================================================================
 
-POINTING_LOSS_DB = 0.0
+SAT_POINTING_ERROR_DEG = 10.0
+SAT_POINTING_LOSS_DB = 0.5
+
+
+# ============================================================================
+# GROUND ANTENNA TRACKING
+#
+# Assume an azimuth/elevation tracking system can maintain the ground antenna
+# within 1 degree of the predicted satellite line of sight
+#
+# Ground pointing loss is calculated dynamically from antenna gain because
+# higher-gain dishes have narrower beams
+# ============================================================================
+
+GROUND_TRACKING_ERROR_DEG = 1.0
+
+# Preliminary aperture efficiency used to estimate dish beamwidth from gain
+GROUND_DISH_EFFICIENCY = 0.60
+
+
+# ============================================================================
+# OTHER RF LOSSES
+# ============================================================================
+
+SAT_RF_PATH_LOSS_DB = 0.5
+GROUND_RF_PATH_LOSS_DB = 0.5
+
+POLARIZATION_LOSS_DB = 0.5
+ATMOSPHERIC_LOSS_DB = 0.5
+
 OTHER_RF_LOSS_DB = 0.0
-LINK_MARGIN_DB = 0.0
-PROTOCOL_EFFICIENCY = 1.0
+
+# Reserve beyond explicitly modeled physical losses
+LINK_MARGIN_DB = 6.0
+
+# Preliminary application-throughput derating
+PROTOCOL_EFFICIENCY = 0.80
+
+
+# ============================================================================
+# LEGACY TRADE FILTERS
+#
+# Existing design_trade.py still imports these
+# hardware_coverage_summary.csv remains the main output for current sweeps
+# ============================================================================
+
+DESIGN_MIN_PEAK_ELEVATION_DEG = 30.0
+MAX_S_BAND_TX_POWER_W = 3.0
 
 
 # ============================================================================
@@ -129,9 +159,7 @@ SX1280_SUPPLY_VOLTAGE_V = 3.3
 SX1280_TX_CURRENT_A = 0.024
 SX1280_DC_POWER_W = SX1280_SUPPLY_VOLTAGE_V * SX1280_TX_CURRENT_A
 
-# Preliminary external PA efficiency
 PA_EFFICIENCY = 0.35
 
-# Add when known
 MAINBOARD_MCU_TX_POWER_W = 0.0
 OTHER_TX_ELECTRONICS_POWER_W = 0.0
