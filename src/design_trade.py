@@ -195,8 +195,6 @@ def build_minimum_ground_gain_table(hardware_trade_df):
 # PASS-LEVEL HARDWARE RESULTS
 #
 # One row = one actual pass + one complete hardware configuration
-#
-# This preserves the actual maximum elevation instead of aggregating it away
 # ============================================================================
 
 def build_pass_hardware_results(pass_sweep_df):
@@ -210,6 +208,9 @@ def build_pass_hardware_results(pass_sweep_df):
         "ground_antenna_gain_dbi",
         "total_tx_dc_w",
         "pa_dc_w",
+        "max_payload_possible_mb",
+        "full_window_tx_time_min",
+        "full_window_energy_wh",
         "optimized_completed",
         "optimized_payload_sent_mb",
         "optimized_tx_time_min",
@@ -243,10 +244,6 @@ def build_pass_hardware_results(pass_sweep_df):
 # HARDWARE COVERAGE SUMMARY
 #
 # This ignores the 30 degree design threshold
-#
-# Instead, for every complete hardware combination, look across every actual
-# modeled pass and report the range of pass elevations it can successfully
-# handle
 # ============================================================================
 
 def build_hardware_coverage_summary(pass_sweep_df):

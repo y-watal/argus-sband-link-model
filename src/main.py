@@ -286,6 +286,42 @@ def simulate_optimized_transmission(link_df, tx_power_dbm):
 
 
 # ============================================================================
+# FULL USABLE PASS CAPACITY
+#
+# Transmit during every interval where the modeled link has positive useful
+# throughput. This gives:
+#
+#   maximum transferable payload
+#   total TX-on time
+#   total electrical energy if the whole usable window is used
+# ============================================================================
+
+def simulate_full_window_transmission(link_df, tx_power_dbm):
+    times = link_df["elapsed_s"].to_numpy()
+    rates = link_df["useful_rate_bps"].to_numpy()
+
+    dt_s = np.diff(times)
+    interval_rates = rates[:-1]
+
+    active = interval_rates > 0
+
+    total_bits = np.sum(interval_rates * dt_s)
+    tx_time_s = np.sum(dt_s[active])
+
+    power = transmitter_dc_power_w(tx_power_dbm)
+
+    energy_j = power["total_dc_w"] * tx_time_s
+
+    return {
+        "max_payload_possible_mb": total_bits / 8.0 / 1e6,
+        "full_window_tx_time_s": tx_time_s,
+        "full_window_tx_time_min": tx_time_s / 60.0,
+        "full_window_energy_j": energy_j,
+        "full_window_energy_wh": energy_j / 3600.0,
+    }
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -434,6 +470,11 @@ def main():
                         tx_power_dbm,
                     )
 
+                    full_window = simulate_full_window_transmission(
+                        link_df,
+                        tx_power_dbm,
+                    )
+
                     power = transmitter_dc_power_w(tx_power_dbm)
 
                     energy_saved_pct = np.nan
@@ -465,6 +506,15 @@ def main():
                             "ground_antenna_gain_dbi": ground_gain_dbi,
                             "total_tx_dc_w": power["total_dc_w"],
                             "pa_dc_w": power["pa_dc_w"],
+                            "max_payload_possible_mb": full_window[
+                                "max_payload_possible_mb"
+                            ],
+                            "full_window_tx_time_min": full_window[
+                                "full_window_tx_time_min"
+                            ],
+                            "full_window_energy_wh": full_window[
+                                "full_window_energy_wh"
+                            ],
                             "earliest_completed": earliest["completed"],
                             "earliest_payload_sent_mb": earliest["payload_sent_mb"],
                             "earliest_tx_time_min": earliest["tx_time_min"],
