@@ -9,6 +9,8 @@ from config import (
     TX_POWER_DBM_OPTIONS,
     SAT_ANTENNA_GAIN_DBI_OPTIONS,
     GROUND_ANTENNA_GAIN_DBI_OPTIONS,
+    SAT_POINTING_ERROR_DEG_OPTIONS,
+    GROUND_TRACKING_ERROR_DEG_OPTIONS,
     GROUND_STATION_LAT_DEG,
     GROUND_STATION_LON_DEG,
     PASS_SEARCH_HOURS,
@@ -450,94 +452,100 @@ def main():
             pass_info,
         )
 
-        for sat_gain_dbi in SAT_ANTENNA_GAIN_DBI_OPTIONS:
-            for ground_gain_dbi in GROUND_ANTENNA_GAIN_DBI_OPTIONS:
-                for tx_power_dbm in TX_POWER_DBM_OPTIONS:
-                    link_df = build_link_timeline(
-                        pass_df,
-                        tx_power_dbm,
-                        sat_gain_dbi,
-                        ground_gain_dbi,
-                    )
-
-                    earliest = simulate_earliest_transmission(
-                        link_df,
-                        tx_power_dbm,
-                    )
-
-                    optimized = simulate_optimized_transmission(
-                        link_df,
-                        tx_power_dbm,
-                    )
-
-                    full_window = simulate_full_window_transmission(
-                        link_df,
-                        tx_power_dbm,
-                    )
-
-                    power = transmitter_dc_power_w(tx_power_dbm)
-
-                    energy_saved_pct = np.nan
-
-                    if (
-                        earliest["completed"]
-                        and optimized["completed"]
-                        and earliest["energy_wh"] > 0
-                    ):
-                        energy_saved_pct = (
-                            (
-                                earliest["energy_wh"]
-                                - optimized["energy_wh"]
+        for sat_pointing_error_deg in SAT_POINTING_ERROR_DEG_OPTIONS:
+            for ground_tracking_error_deg in GROUND_TRACKING_ERROR_DEG_OPTIONS:
+                for sat_gain_dbi in SAT_ANTENNA_GAIN_DBI_OPTIONS:
+                    for ground_gain_dbi in GROUND_ANTENNA_GAIN_DBI_OPTIONS:
+                        for tx_power_dbm in TX_POWER_DBM_OPTIONS:
+                            link_df = build_link_timeline(
+                                pass_df,
+                                tx_power_dbm,
+                                sat_gain_dbi,
+                                ground_gain_dbi,
+                                ground_tracking_error_deg,
+                                sat_pointing_error_deg,
                             )
-                            / earliest["energy_wh"]
-                            * 100.0
-                        )
 
-                    sweep_rows.append(
-                        {
-                            "pass_id": pass_info["pass_id"],
-                            "rise_utc": pass_info[
-                                "rise_time"
-                            ].utc_datetime().isoformat(),
-                            "max_elevation_deg": pass_info["max_elevation_deg"],
-                            "pass_duration_min": pass_info["duration_s"] / 60.0,
-                            "tx_power_dbm": tx_power_dbm,
-                            "sat_antenna_gain_dbi": sat_gain_dbi,
-                            "ground_antenna_gain_dbi": ground_gain_dbi,
-                            "total_tx_dc_w": power["total_dc_w"],
-                            "pa_dc_w": power["pa_dc_w"],
-                            "max_payload_possible_mb": full_window[
-                                "max_payload_possible_mb"
-                            ],
-                            "full_window_tx_time_min": full_window[
-                                "full_window_tx_time_min"
-                            ],
-                            "full_window_energy_wh": full_window[
-                                "full_window_energy_wh"
-                            ],
-                            "earliest_completed": earliest["completed"],
-                            "earliest_payload_sent_mb": earliest["payload_sent_mb"],
-                            "earliest_tx_time_min": earliest["tx_time_min"],
-                            "earliest_start_elevation_deg": earliest[
-                                "start_elevation_deg"
-                            ],
-                            "earliest_end_elevation_deg": earliest[
-                                "end_elevation_deg"
-                            ],
-                            "earliest_energy_wh": earliest["energy_wh"],
-                            "optimized_completed": optimized["completed"],
-                            "optimized_payload_sent_mb": optimized["payload_sent_mb"],
-                            "optimized_tx_time_min": optimized["tx_time_min"],
-                            "optimized_start_elevation_deg": optimized[
-                                "start_elevation_deg"
-                            ],
-                            "optimized_end_elevation_deg": optimized[
-                                "end_elevation_deg"
-                            ],
-                            "optimized_energy_wh": optimized["energy_wh"],
-                            "energy_saved_pct": energy_saved_pct,
-                        }
-                    )
+                            earliest = simulate_earliest_transmission(
+                                link_df,
+                                tx_power_dbm,
+                            )
+
+                            optimized = simulate_optimized_transmission(
+                                link_df,
+                                tx_power_dbm,
+                            )
+
+                            full_window = simulate_full_window_transmission(
+                                link_df,
+                                tx_power_dbm,
+                            )
+
+                            power = transmitter_dc_power_w(tx_power_dbm)
+
+                            energy_saved_pct = np.nan
+
+                            if (
+                                earliest["completed"]
+                                and optimized["completed"]
+                                and earliest["energy_wh"] > 0
+                            ):
+                                energy_saved_pct = (
+                                    (
+                                        earliest["energy_wh"]
+                                        - optimized["energy_wh"]
+                                    )
+                                    / earliest["energy_wh"]
+                                    * 100.0
+                                )
+
+                            sweep_rows.append(
+                                {
+                                    "pass_id": pass_info["pass_id"],
+                                    "rise_utc": pass_info[
+                                        "rise_time"
+                                    ].utc_datetime().isoformat(),
+                                    "max_elevation_deg": pass_info["max_elevation_deg"],
+                                    "pass_duration_min": pass_info["duration_s"] / 60.0,
+                                    "tx_power_dbm": tx_power_dbm,
+                                    "sat_antenna_gain_dbi": sat_gain_dbi,
+                                    "ground_antenna_gain_dbi": ground_gain_dbi,
+                                    "sat_pointing_error_deg": sat_pointing_error_deg,
+                                    "ground_tracking_error_deg": ground_tracking_error_deg,
+                                    "total_tx_dc_w": power["total_dc_w"],
+                                    "pa_dc_w": power["pa_dc_w"],
+                                    "max_payload_possible_mb": full_window[
+                                        "max_payload_possible_mb"
+                                    ],
+                                    "full_window_tx_time_min": full_window[
+                                        "full_window_tx_time_min"
+                                    ],
+                                    "full_window_energy_wh": full_window[
+                                        "full_window_energy_wh"
+                                    ],
+                                    "earliest_completed": earliest["completed"],
+                                    "earliest_payload_sent_mb": earliest["payload_sent_mb"],
+                                    "earliest_tx_time_min": earliest["tx_time_min"],
+                                    "earliest_start_elevation_deg": earliest[
+                                        "start_elevation_deg"
+                                    ],
+                                    "earliest_end_elevation_deg": earliest[
+                                        "end_elevation_deg"
+                                    ],
+                                    "earliest_energy_wh": earliest["energy_wh"],
+                                    "optimized_completed": optimized["completed"],
+                                    "optimized_payload_sent_mb": optimized["payload_sent_mb"],
+                                    "optimized_tx_time_min": optimized["tx_time_min"],
+                                    "optimized_start_elevation_deg": optimized[
+                                        "start_elevation_deg"
+                                    ],
+                                    "optimized_end_elevation_deg": optimized[
+                                        "end_elevation_deg"
+                                    ],
+                                    "optimized_energy_wh": optimized["energy_wh"],
+                                    "energy_saved_pct": energy_saved_pct,
+                                }
+                            )
 
     sweep_df = pd.DataFrame(sweep_rows)
 

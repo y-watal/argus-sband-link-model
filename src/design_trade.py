@@ -28,12 +28,20 @@ def build_hardware_trade_summary(pass_sweep_df):
         "tx_power_dbm",
         "sat_antenna_gain_dbi",
         "ground_antenna_gain_dbi",
+        "sat_pointing_error_deg",
+        "ground_tracking_error_deg",
     ]
 
     rows = []
 
     for hardware, group in design_pass_df.groupby(group_columns):
-        tx_power_dbm, sat_gain_dbi, ground_gain_dbi = hardware
+        (
+            tx_power_dbm,
+            sat_gain_dbi,
+            ground_gain_dbi,
+            sat_pointing_error_deg,
+            ground_tracking_error_deg,
+        ) = hardware
 
         total_tx_dc_w = float(group["total_tx_dc_w"].iloc[0])
 
@@ -101,6 +109,8 @@ def build_hardware_trade_summary(pass_sweep_df):
                 "tx_power_dbm": tx_power_dbm,
                 "sat_antenna_gain_dbi": sat_gain_dbi,
                 "ground_antenna_gain_dbi": ground_gain_dbi,
+                "sat_pointing_error_deg": sat_pointing_error_deg,
+                "ground_tracking_error_deg": ground_tracking_error_deg,
                 "total_tx_dc_w": total_tx_dc_w,
                 "max_allowed_tx_dc_w": MAX_S_BAND_TX_POWER_W,
                 "within_power_budget": within_power_budget,
@@ -123,6 +133,8 @@ def build_hardware_trade_summary(pass_sweep_df):
             "tx_power_dbm",
             "sat_antenna_gain_dbi",
             "ground_antenna_gain_dbi",
+            "sat_pointing_error_deg",
+            "ground_tracking_error_deg",
         ]
     ).reset_index(drop=True)
 
@@ -130,8 +142,11 @@ def build_hardware_trade_summary(pass_sweep_df):
 # ============================================================================
 # MINIMUM GROUND ANTENNA GAIN
 #
-# For every PA + satellite antenna combination, find the smallest ground
-# antenna gain that satisfies the configured design requirement
+# For every satellite antenna / TX power / pointing-accuracy combination,
+# find the smallest ground antenna gain that satisfies the configured design
+# requirement. With the satellite antenna and TX power now fixed to the
+# selected hardware, this table is mainly useful for reading off how much
+# satellite pointing accuracy and ground tracking accuracy actually buy you
 # ============================================================================
 
 def build_minimum_ground_gain_table(hardware_trade_df):
@@ -139,11 +154,16 @@ def build_minimum_ground_gain_table(hardware_trade_df):
         hardware_trade_df["design_valid"]
     ].copy()
 
+    group_columns = [
+        "tx_power_dbm",
+        "sat_antenna_gain_dbi",
+        "sat_pointing_error_deg",
+        "ground_tracking_error_deg",
+    ]
+
     if valid_df.empty:
         return pd.DataFrame(
-            columns=[
-                "tx_power_dbm",
-                "sat_antenna_gain_dbi",
+            columns=group_columns + [
                 "minimum_ground_antenna_gain_dbi",
                 "total_tx_dc_w",
                 "worst_case_max_elevation_deg",
@@ -154,10 +174,13 @@ def build_minimum_ground_gain_table(hardware_trade_df):
 
     rows = []
 
-    for hardware, group in valid_df.groupby(
-        ["tx_power_dbm", "sat_antenna_gain_dbi"]
-    ):
-        tx_power_dbm, sat_gain_dbi = hardware
+    for hardware, group in valid_df.groupby(group_columns):
+        (
+            tx_power_dbm,
+            sat_gain_dbi,
+            sat_pointing_error_deg,
+            ground_tracking_error_deg,
+        ) = hardware
 
         best_row = group.loc[
             group["ground_antenna_gain_dbi"].idxmin()
@@ -167,6 +190,8 @@ def build_minimum_ground_gain_table(hardware_trade_df):
             {
                 "tx_power_dbm": tx_power_dbm,
                 "sat_antenna_gain_dbi": sat_gain_dbi,
+                "sat_pointing_error_deg": sat_pointing_error_deg,
+                "ground_tracking_error_deg": ground_tracking_error_deg,
                 "minimum_ground_antenna_gain_dbi": (
                     best_row["ground_antenna_gain_dbi"]
                 ),
@@ -187,6 +212,8 @@ def build_minimum_ground_gain_table(hardware_trade_df):
         [
             "tx_power_dbm",
             "sat_antenna_gain_dbi",
+            "sat_pointing_error_deg",
+            "ground_tracking_error_deg",
         ]
     ).reset_index(drop=True)
 
@@ -206,6 +233,8 @@ def build_pass_hardware_results(pass_sweep_df):
         "tx_power_dbm",
         "sat_antenna_gain_dbi",
         "ground_antenna_gain_dbi",
+        "sat_pointing_error_deg",
+        "ground_tracking_error_deg",
         "total_tx_dc_w",
         "pa_dc_w",
         "max_payload_possible_mb",
@@ -236,6 +265,8 @@ def build_pass_hardware_results(pass_sweep_df):
             "tx_power_dbm",
             "sat_antenna_gain_dbi",
             "ground_antenna_gain_dbi",
+            "sat_pointing_error_deg",
+            "ground_tracking_error_deg",
         ]
     ).reset_index(drop=True)
 
@@ -251,12 +282,20 @@ def build_hardware_coverage_summary(pass_sweep_df):
         "tx_power_dbm",
         "sat_antenna_gain_dbi",
         "ground_antenna_gain_dbi",
+        "sat_pointing_error_deg",
+        "ground_tracking_error_deg",
     ]
 
     rows = []
 
     for hardware, group in pass_sweep_df.groupby(group_columns):
-        tx_power_dbm, sat_gain_dbi, ground_gain_dbi = hardware
+        (
+            tx_power_dbm,
+            sat_gain_dbi,
+            ground_gain_dbi,
+            sat_pointing_error_deg,
+            ground_tracking_error_deg,
+        ) = hardware
 
         total_tx_dc_w = float(group["total_tx_dc_w"].iloc[0])
         within_power_budget = total_tx_dc_w <= MAX_S_BAND_TX_POWER_W
@@ -306,6 +345,8 @@ def build_hardware_coverage_summary(pass_sweep_df):
                 "tx_power_dbm": tx_power_dbm,
                 "sat_antenna_gain_dbi": sat_gain_dbi,
                 "ground_antenna_gain_dbi": ground_gain_dbi,
+                "sat_pointing_error_deg": sat_pointing_error_deg,
+                "ground_tracking_error_deg": ground_tracking_error_deg,
                 "total_tx_dc_w": total_tx_dc_w,
                 "within_power_budget": within_power_budget,
                 "total_passes_tested": total_passes,
@@ -341,5 +382,7 @@ def build_hardware_coverage_summary(pass_sweep_df):
             "tx_power_dbm",
             "sat_antenna_gain_dbi",
             "ground_antenna_gain_dbi",
+            "sat_pointing_error_deg",
+            "ground_tracking_error_deg",
         ]
     ).reset_index(drop=True)

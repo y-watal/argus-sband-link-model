@@ -60,7 +60,17 @@ MESSAGE_SIZE_BITS = MESSAGE_SIZE_MB * 1e6 * 8.0
 
 
 # ============================================================================
-# SELECTED HARDWARE CONFIGURATION
+# HARDWARE SWEEP
+#
+# Spacecraft antenna and TX power are set to the selected candidate hardware:
+# Southwest Antennas 1055-342 (6.3 dBi RHCP patch, space-rated) driven at
+# 27 dBm - the only TX power in the earlier broader sweep that landed on a
+# realistically sized ground dish (~1.1 m) while staying within the 3 W
+# power budget
+#
+# Ground antenna gain is still swept to size the dish. Satellite and ground
+# pointing error are now swept instead (see below) since the antenna
+# hardware itself is fixed
 # ============================================================================
 
 TX_POWER_DBM_OPTIONS = [
@@ -89,6 +99,24 @@ DOWNLINK_FREQUENCY_MHZ = 2425.0
 
 SAT_POINTING_ERROR_DEG = 10.0
 
+# Swept in the main sweep now that satellite antenna and TX power are fixed
+# to the selected hardware, to see how much target-track pointing accuracy
+# the ADCS actually needs to deliver
+SAT_POINTING_ERROR_DEG_OPTIONS = [
+    2.0,
+    5.0,
+    10.0,
+    20.0,
+]
+
+# Preliminary pencil-beam approximation relating gain to half-power
+# beamwidth for the satellite antenna (patch / horn style, not a parabolic
+# aperture like the ground dish):
+#
+#     G_linear ~= constant / HPBW_deg^2
+#
+# 41253 deg^2 is the standard approximation for a symmetric pencil beam
+# (Balanis). Replace with the actual antenna pattern once one is chosen
 SAT_ANTENNA_BEAM_CONSTANT_DEG2 = 41253.0
 
 
@@ -107,6 +135,16 @@ MAX_TARGET_TRACK_SLEW_RATE_DEG_S = 2.0
 
 GROUND_TRACKING_ERROR_DEG = 1.0
 
+# Swept in the main sweep alongside satellite pointing error, to see how
+# much rotator precision is actually worth investing in
+GROUND_TRACKING_ERROR_DEG_OPTIONS = [
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+]
+
+# Preliminary aperture efficiency used to estimate dish beamwidth from gain
 GROUND_DISH_EFFICIENCY = 0.60
 
 

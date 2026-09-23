@@ -317,13 +317,16 @@ def estimate_sat_hpbw_deg(sat_gain_dbi):
 #     L_point ~= 12 * (pointing_error / HPBW)^2
 # ============================================================================
 
-def sat_pointing_loss_db(sat_gain_dbi):
+def sat_pointing_loss_db(
+    sat_gain_dbi,
+    sat_pointing_error_deg=SAT_POINTING_ERROR_DEG,
+):
     hpbw_deg = estimate_sat_hpbw_deg(
         sat_gain_dbi
     )
 
     loss_db = 12.0 * (
-        SAT_POINTING_ERROR_DEG
+        sat_pointing_error_deg
         / hpbw_deg
     ) ** 2
 
@@ -338,9 +341,13 @@ def physical_link_losses_db(
     sat_gain_dbi,
     ground_gain_dbi,
     ground_tracking_error_deg=GROUND_TRACKING_ERROR_DEG,
+    sat_pointing_error_deg=SAT_POINTING_ERROR_DEG,
 ):
     return (
-        sat_pointing_loss_db(sat_gain_dbi)
+        sat_pointing_loss_db(
+            sat_gain_dbi,
+            sat_pointing_error_deg,
+        )
         + ground_pointing_loss_db(
             ground_gain_dbi,
             ground_tracking_error_deg,
@@ -363,6 +370,7 @@ def received_power_dbm(
     ground_gain_dbi,
     distance_km,
     ground_tracking_error_deg=GROUND_TRACKING_ERROR_DEG,
+    sat_pointing_error_deg=SAT_POINTING_ERROR_DEG,
 ):
     return (
         tx_power_dbm
@@ -373,6 +381,7 @@ def received_power_dbm(
             sat_gain_dbi,
             ground_gain_dbi,
             ground_tracking_error_deg,
+            sat_pointing_error_deg,
         )
     )
 
@@ -406,6 +415,7 @@ def build_link_timeline(
     sat_gain_dbi,
     ground_gain_dbi,
     ground_tracking_error_deg=GROUND_TRACKING_ERROR_DEG,
+    sat_pointing_error_deg=SAT_POINTING_ERROR_DEG,
 ):
     link_df = pass_df.copy()
 
@@ -414,7 +424,8 @@ def build_link_timeline(
     )
 
     sat_pointing_loss = sat_pointing_loss_db(
-        sat_gain_dbi
+        sat_gain_dbi,
+        sat_pointing_error_deg,
     )
 
     ground_hpbw_deg = estimate_ground_hpbw_deg(
@@ -430,6 +441,7 @@ def build_link_timeline(
         sat_gain_dbi,
         ground_gain_dbi,
         ground_tracking_error_deg,
+        sat_pointing_error_deg,
     )
 
     path_losses_db = []
@@ -450,6 +462,8 @@ def build_link_timeline(
             sat_gain_dbi,
             ground_gain_dbi,
             distance_km,
+            ground_tracking_error_deg,
+            sat_pointing_error_deg,
         )
 
         mode = select_mode(
@@ -511,7 +525,7 @@ def build_link_timeline(
     link_df["sat_antenna_gain_dbi"] = sat_gain_dbi
     link_df["ground_antenna_gain_dbi"] = ground_gain_dbi
 
-    link_df["sat_pointing_error_deg"] = SAT_POINTING_ERROR_DEG
+    link_df["sat_pointing_error_deg"] = sat_pointing_error_deg
     link_df["sat_hpbw_deg"] = sat_hpbw_deg
     link_df["sat_pointing_loss_db"] = sat_pointing_loss
 
