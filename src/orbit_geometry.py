@@ -141,6 +141,12 @@ def sample_pass(timescale, satellite, ground_station, pass_info):
         for value in times.utc_datetime()
     ]
 
+    los_angular_rate_deg_s = estimate_los_angular_rate_deg_s(
+        elevation_deg=altitude.degrees,
+        azimuth_deg=azimuth.degrees,
+        elapsed_s=elapsed_s,
+    )
+
     return pd.DataFrame(
         {
             "pass_id": pass_info["pass_id"],
@@ -150,8 +156,63 @@ def sample_pass(timescale, satellite, ground_station, pass_info):
             "elevation_deg": altitude.degrees,
             "azimuth_deg": azimuth.degrees,
             "slant_range_km": distance.km,
+            "los_angular_rate_deg_s": los_angular_rate_deg_s,
         }
     )
+
+
+# ============================================================================
+# LINE-OF-SIGHT ANGULAR RATE
+#
+# Approximates how fast a target-tracking antenna would need to slew to
+# keep boresight on the other end of the link
+#
+# This uses the ground-station-frame (topocentric az/el) line-of-sight rate
+# as a proxy for the true satellite-body-frame tracking rate the spacecraft
+# ADCS would need to sustain. The two are not identical (they are rates in
+# different rotating frames), but are the same order of magnitude, and this
+# is a reasonable approximation until a rigorous ECI-frame slew-rate
+# calculation is needed
+# ============================================================================
+
+def estimate_los_angular_rate_deg_s(elevation_deg, azimuth_deg, elapsed_s):
+    elevation_rad = np.radians(elevation_deg)
+    azimuth_rad = np.radians(azimuth_deg)
+
+    line_of_sight_unit_vectors = np.stack(
+        [
+            np.cos(elevation_rad) * np.sin(azimuth_rad),
+            np.cos(elevation_rad) * np.cos(azimuth_rad),
+            np.sin(elevation_rad),
+        ],
+        axis=1,
+    )
+
+    dot_products = np.clip(
+        np.sum(
+            line_of_sight_unit_vectors[:-1] * line_of_sight_unit_vectors[1:],
+            axis=1,
+        ),
+        -1.0,
+        1.0,
+    )
+
+    angle_between_deg = np.degrees(np.arccos(dot_products))
+    dt_s = np.diff(elapsed_s)
+
+    rate_deg_s = np.zeros(len(elapsed_s))
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rate_deg_s[1:] = np.where(
+            dt_s > 0,
+            angle_between_deg / dt_s,
+            0.0,
+        )
+
+    if len(rate_deg_s) > 1:
+        rate_deg_s[0] = rate_deg_s[1]
+
+    return rate_deg_s
 
 
 # ============================================================================

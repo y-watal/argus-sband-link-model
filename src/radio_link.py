@@ -5,9 +5,10 @@ import numpy as np
 from config import (
     DOWNLINK_FREQUENCY_MHZ,
     SAT_POINTING_ERROR_DEG,
-    SAT_POINTING_LOSS_DB,
+    SAT_ANTENNA_BEAM_CONSTANT_DEG2,
     GROUND_TRACKING_ERROR_DEG,
     GROUND_DISH_EFFICIENCY,
+    MAX_POINTING_LOSS_DB,
     SAT_RF_PATH_LOSS_DB,
     GROUND_RF_PATH_LOSS_DB,
     POLARIZATION_LOSS_DB,
@@ -15,6 +16,8 @@ from config import (
     OTHER_RF_LOSS_DB,
     LINK_MARGIN_DB,
     PROTOCOL_EFFICIENCY,
+    TARGET_ACQUISITION_TIME_S,
+    MAX_TARGET_TRACK_SLEW_RATE_DEG_S,
 )
 
 
@@ -268,25 +271,80 @@ def estimate_ground_hpbw_deg(ground_gain_dbi):
 # because their estimated beamwidth is narrower.
 # ============================================================================
 
-def ground_pointing_loss_db(ground_gain_dbi):
+def ground_pointing_loss_db(
+    ground_gain_dbi,
+    ground_tracking_error_deg=GROUND_TRACKING_ERROR_DEG,
+):
     hpbw_deg = estimate_ground_hpbw_deg(
         ground_gain_dbi
     )
 
-    return 12.0 * (
-        GROUND_TRACKING_ERROR_DEG
+    loss_db = 12.0 * (
+        ground_tracking_error_deg
         / hpbw_deg
     ) ** 2
+
+    return min(loss_db, MAX_POINTING_LOSS_DB)
+
+
+# ============================================================================
+# ESTIMATE SATELLITE ANTENNA BEAMWIDTH
+#
+# Pencil-beam approximation (patch / horn style antenna, not a parabolic
+# aperture):
+#
+#     G_linear ~= constant / HPBW_deg^2
+#
+# so HPBW_deg ~= sqrt(constant / G_linear)
+# ============================================================================
+
+def estimate_sat_hpbw_deg(sat_gain_dbi):
+    gain_linear = 10.0 ** (sat_gain_dbi / 10.0)
+
+    return math.sqrt(
+        SAT_ANTENNA_BEAM_CONSTANT_DEG2
+        / gain_linear
+    )
+
+
+# ============================================================================
+# SATELLITE POINTING LOSS
+#
+# Target-track: the spacecraft slews to keep boresight on the ground
+# station, so only the residual pointing error matters. A higher-gain,
+# narrower-beam satellite antenna pays a larger penalty for the same error
+#
+#     L_point ~= 12 * (pointing_error / HPBW)^2
+# ============================================================================
+
+def sat_pointing_loss_db(sat_gain_dbi):
+    hpbw_deg = estimate_sat_hpbw_deg(
+        sat_gain_dbi
+    )
+
+    loss_db = 12.0 * (
+        SAT_POINTING_ERROR_DEG
+        / hpbw_deg
+    ) ** 2
+
+    return min(loss_db, MAX_POINTING_LOSS_DB)
 
 
 # ============================================================================
 # TOTAL PHYSICAL LINK LOSSES
 # ============================================================================
 
-def physical_link_losses_db(ground_gain_dbi):
+def physical_link_losses_db(
+    sat_gain_dbi,
+    ground_gain_dbi,
+    ground_tracking_error_deg=GROUND_TRACKING_ERROR_DEG,
+):
     return (
-        SAT_POINTING_LOSS_DB
-        + ground_pointing_loss_db(ground_gain_dbi)
+        sat_pointing_loss_db(sat_gain_dbi)
+        + ground_pointing_loss_db(
+            ground_gain_dbi,
+            ground_tracking_error_deg,
+        )
         + SAT_RF_PATH_LOSS_DB
         + GROUND_RF_PATH_LOSS_DB
         + POLARIZATION_LOSS_DB
@@ -304,13 +362,18 @@ def received_power_dbm(
     sat_gain_dbi,
     ground_gain_dbi,
     distance_km,
+    ground_tracking_error_deg=GROUND_TRACKING_ERROR_DEG,
 ):
     return (
         tx_power_dbm
         + sat_gain_dbi
         + ground_gain_dbi
         - fspl_db(distance_km)
-        - physical_link_losses_db(ground_gain_dbi)
+        - physical_link_losses_db(
+            sat_gain_dbi,
+            ground_gain_dbi,
+            ground_tracking_error_deg,
+        )
     )
 
 
@@ -342,19 +405,31 @@ def build_link_timeline(
     tx_power_dbm,
     sat_gain_dbi,
     ground_gain_dbi,
+    ground_tracking_error_deg=GROUND_TRACKING_ERROR_DEG,
 ):
     link_df = pass_df.copy()
+
+    sat_hpbw_deg = estimate_sat_hpbw_deg(
+        sat_gain_dbi
+    )
+
+    sat_pointing_loss = sat_pointing_loss_db(
+        sat_gain_dbi
+    )
 
     ground_hpbw_deg = estimate_ground_hpbw_deg(
         ground_gain_dbi
     )
 
     ground_pointing_loss = ground_pointing_loss_db(
-        ground_gain_dbi
+        ground_gain_dbi,
+        ground_tracking_error_deg,
     )
 
     modeled_losses_db = physical_link_losses_db(
-        ground_gain_dbi
+        sat_gain_dbi,
+        ground_gain_dbi,
+        ground_tracking_error_deg,
     )
 
     path_losses_db = []
@@ -437,9 +512,10 @@ def build_link_timeline(
     link_df["ground_antenna_gain_dbi"] = ground_gain_dbi
 
     link_df["sat_pointing_error_deg"] = SAT_POINTING_ERROR_DEG
-    link_df["sat_pointing_loss_db"] = SAT_POINTING_LOSS_DB
+    link_df["sat_hpbw_deg"] = sat_hpbw_deg
+    link_df["sat_pointing_loss_db"] = sat_pointing_loss
 
-    link_df["ground_tracking_error_deg"] = GROUND_TRACKING_ERROR_DEG
+    link_df["ground_tracking_error_deg"] = ground_tracking_error_deg
     link_df["ground_hpbw_deg"] = ground_hpbw_deg
     link_df["ground_pointing_loss_db"] = ground_pointing_loss
 
@@ -460,6 +536,35 @@ def build_link_timeline(
     link_df["remaining_link_margin_db"] = link_margin_remaining_db
 
     link_df["useful_rate_bps"] = useful_rates_bps
+
+    # ------------------------------------------------------------------
+    # TARGET-TRACK ACQUISITION / SLEW LIMIT
+    #
+    # Blank out any part of the pass the spacecraft cannot actually use:
+    # the initial settle time, and any stretch where the required
+    # tracking rate exceeds what the ADCS can sustain
+    # ------------------------------------------------------------------
+
+    acquiring_mask = (
+        link_df["elapsed_s"] < TARGET_ACQUISITION_TIME_S
+    )
+
+    slew_limited_mask = (
+        link_df["los_angular_rate_deg_s"].abs()
+        > MAX_TARGET_TRACK_SLEW_RATE_DEG_S
+    )
+
+    unusable_mask = acquiring_mask | slew_limited_mask
+
+    link_df.loc[unusable_mask, "useful_rate_bps"] = 0.0
+
+    link_df.loc[acquiring_mask, "selected_mode"] = "ACQUIRING"
+
+    link_df.loc[
+        slew_limited_mask & ~acquiring_mask,
+        "selected_mode",
+    ] = "SLEW-LIMITED"
+
     link_df["useful_rate_kbps"] = link_df["useful_rate_bps"] / 1000.0
 
     return link_df

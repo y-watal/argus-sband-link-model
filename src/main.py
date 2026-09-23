@@ -3,6 +3,7 @@ import pandas as pd
 
 from config import (
     DATA_OUTPUT_DIRECTORY,
+    GENERATE_PLOTS,
     MESSAGE_SIZE_MB,
     MESSAGE_SIZE_BITS,
     TX_POWER_DBM_OPTIONS,
@@ -556,12 +557,15 @@ def main():
     # PLOTS
     # ========================================================================
 
-    make_rate_plots(rate_df)
-    make_pass_plots(sweep_df)
+    if GENERATE_PLOTS:
+        make_rate_plots(rate_df)
+        make_pass_plots(sweep_df)
 
-    make_hardware_trade_plot(
-        minimum_ground_gain_df
-    )
+        make_hardware_trade_plot(
+            minimum_ground_gain_df
+        )
+    else:
+        print("\nGENERATE_PLOTS is False - skipping plot generation.")
 
     # ========================================================================
     # SUMMARY
