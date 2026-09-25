@@ -52,7 +52,13 @@ PASS_SAMPLE_STEP_S = 1.0
 
 
 # ============================================================================
-# MISSION REQUIREMENT
+# REFERENCE IMAGE SIZE
+#
+# Image size is variable - the primary output is the maximum payload each
+# pass can carry (max_payload_possible_mb). This reference size is only used
+# to report how long / how much energy it takes to send one image of this
+# size, and on how many passes it would fit. It is not a pass/fail
+# requirement
 # ============================================================================
 
 MESSAGE_SIZE_MB = 2.0
@@ -63,10 +69,15 @@ MESSAGE_SIZE_BITS = MESSAGE_SIZE_MB * 1e6 * 8.0
 # HARDWARE SWEEP
 #
 # Spacecraft antenna and TX power are set to the selected candidate hardware:
-# Southwest Antennas 1055-342 (6.3 dBi RHCP patch, space-rated) driven at
-# 27 dBm - the only TX power in the earlier broader sweep that landed on a
+# Southwest Antennas 1055-342 (RHCP patch, space-rated) driven at 27 dBm -
+# the only TX power in the earlier broader sweep that landed on a
 # realistically sized ground dish (~1.1 m) while staying within the 3 W
 # power budget
+#
+# The 1055-342 is sold as 6.3 dBi, but that is its peak at 2400 MHz. Its
+# datasheet gain-vs-frequency plot (measured every 25 MHz) shows 3.6 dBi at
+# 2425 MHz and 5.9 dBi at 2450 MHz. Use the measured value at
+# DOWNLINK_FREQUENCY_MHZ, not the headline number
 #
 # Ground antenna gain is still swept to size the dish. Satellite and ground
 # pointing error are now swept instead (see below) since the antenna
@@ -78,11 +89,23 @@ TX_POWER_DBM_OPTIONS = [
 ]
 
 SAT_ANTENNA_GAIN_DBI_OPTIONS = [
-    6.3,
+    5.9,
 ]
 
+# Realistic gain at DOWNLINK_FREQUENCY_MHZ for the ground antenna candidates,
+# estimated from dish diameter at 60% aperture efficiency (the same
+# assumption GROUND_DISH_EFFICIENCY uses for beamwidth), not vendor
+# headline numbers:
+#
+#   24.9  Mimotik MK-2327PA-27DP, 3 ft, dual linear - 25.2 dBi minus ~0.3 dB
+#         for the 90 deg hybrid needed to make it circular (rated 27 dBi,
+#         likely at the top of its 2.3-2.7 GHz band)
+#   27.6  RF HAMDESIGN 1.2 m mesh kit + LHCP feed (vendor ~27.8 dBi scaled)
+#   29.5  RF HAMDESIGN 1.5 m mesh kit + LHCP feed (vendor ~29.8 dBi scaled)
 GROUND_ANTENNA_GAIN_DBI_OPTIONS = [
-    27.0,
+    24.9,
+    27.6,
+    29.5,
 ]
 
 
@@ -90,7 +113,11 @@ GROUND_ANTENNA_GAIN_DBI_OPTIONS = [
 # RF
 # ============================================================================
 
-DOWNLINK_FREQUENCY_MHZ = 2425.0
+# Placed in the gap between 2.4 GHz Wi-Fi channels 6 (ends ~2448 MHz) and
+# 11 (starts ~2451 MHz), where the satellite antenna's measured gain is
+# 5.9 dBi. 2425 MHz sat on the antenna's measured gain dip (~3.6 dBi).
+# Confirm with a site survey and the experimental license before flight
+DOWNLINK_FREQUENCY_MHZ = 2450.0
 
 
 # ============================================================================
@@ -173,10 +200,13 @@ PROTOCOL_EFFICIENCY = 0.80
 
 
 # ============================================================================
-# LEGACY TRADE FILTERS
+# POWER BUDGET
+#
+# Every predicted pass is evaluated, whatever its peak elevation. A hardware
+# combination is valid if it stays within MAX_S_BAND_TX_POWER_W and the link
+# closes (delivers some data) on every pass
 # ============================================================================
 
-DESIGN_MIN_PEAK_ELEVATION_DEG = 30.0
 MAX_S_BAND_TX_POWER_W = 3.0
 
 

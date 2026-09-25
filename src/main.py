@@ -14,7 +14,8 @@ from config import (
     GROUND_STATION_LAT_DEG,
     GROUND_STATION_LON_DEG,
     PASS_SEARCH_HOURS,
-    DESIGN_MIN_PEAK_ELEVATION_DEG,
+    SAT_POINTING_ERROR_DEG,
+    GROUND_TRACKING_ERROR_DEG,
     MAX_S_BAND_TX_POWER_W,
 )
 
@@ -364,11 +365,9 @@ def main():
         "============================================================"
     )
 
-    print(f"\nPayload requirement: {MESSAGE_SIZE_MB:.2f} MB")
-
     print(
-        f"Design pass threshold: "
-        f"{DESIGN_MIN_PEAK_ELEVATION_DEG:.1f} deg peak elevation"
+        f"\nImage size: variable (reporting max payload per pass; "
+        f"{MESSAGE_SIZE_MB:.2f} MB reference image for time/energy)"
     )
 
     print(
@@ -581,7 +580,7 @@ def main():
     )
 
     # ========================================================================
-    # 30 DEGREE DESIGN REQUIREMENT SUMMARY
+    # HARDWARE TRADE SUMMARY (EVERY PASS)
     # ========================================================================
 
     hardware_trade_df = build_hardware_trade_summary(
@@ -590,6 +589,54 @@ def main():
 
     hardware_trade_df.to_csv(
         DATA_OUTPUT_DIRECTORY / "hardware_trade_summary.csv",
+        index=False,
+    )
+
+    # ========================================================================
+    # MAX PAYLOAD FOR EVERY PASS AT NOMINAL POINTING
+    #
+    # One row per pass, one column per hardware combination, using the
+    # default satellite pointing and ground tracking errors. Every pointing
+    # case is in pass_energy_sweep.csv
+    # ========================================================================
+
+    nominal_df = sweep_df[
+        np.isclose(sweep_df["sat_pointing_error_deg"], SAT_POINTING_ERROR_DEG)
+        & np.isclose(
+            sweep_df["ground_tracking_error_deg"],
+            GROUND_TRACKING_ERROR_DEG,
+        )
+    ]
+
+    max_payload_by_pass_df = nominal_df.pivot_table(
+        index=[
+            "pass_id",
+            "rise_utc",
+            "max_elevation_deg",
+            "pass_duration_min",
+        ],
+        columns=[
+            "tx_power_dbm",
+            "sat_antenna_gain_dbi",
+            "ground_antenna_gain_dbi",
+        ],
+        values="max_payload_possible_mb",
+    )
+
+    max_payload_by_pass_df.columns = [
+        f"max_payload_mb_{tx:g}dBm_sat{sat:g}dBi_gnd{gnd:g}dBi"
+        for tx, sat, gnd in max_payload_by_pass_df.columns
+    ]
+
+    max_payload_by_pass_df = (
+        max_payload_by_pass_df
+        .reset_index()
+        .sort_values("rise_utc")
+        .reset_index(drop=True)
+    )
+
+    max_payload_by_pass_df.to_csv(
+        DATA_OUTPUT_DIRECTORY / "max_payload_by_pass.csv",
         index=False,
     )
 
@@ -629,24 +676,14 @@ def main():
     # SUMMARY
     # ========================================================================
 
-    design_passes = pass_summary_df[
-        pass_summary_df["max_elevation_deg"]
-        >= DESIGN_MIN_PEAK_ELEVATION_DEG
-    ]
-
     print(
-        f"\nPasses satisfying >= "
-        f"{DESIGN_MIN_PEAK_ELEVATION_DEG:.1f} deg threshold: "
-        f"{len(design_passes)}"
-    )
-
-    print(
-        f"Hardware combinations tested: "
+        f"\nHardware combinations tested: "
         f"{len(hardware_trade_df)}"
     )
 
     print(
-        f"Hardware combinations satisfying both link and power requirements: "
+        f"Hardware combinations within the power budget with a link on "
+        f"every pass: "
         f"{len(feasible_hardware_df)}"
     )
 
@@ -662,17 +699,41 @@ def main():
         f"  {DATA_OUTPUT_DIRECTORY / 'hardware_coverage_summary.csv'}"
     )
 
-    if not minimum_ground_gain_df.empty:
-        print(
-            "\nMinimum ground antenna gain for each feasible "
-            "spacecraft design:\n"
-        )
+    capacity_columns = [
+        "ground_antenna_gain_dbi",
+        "sat_pointing_error_deg",
+        "ground_tracking_error_deg",
+        "min_pass_payload_mb",
+        "median_pass_payload_mb",
+        "max_pass_payload_mb",
+        "total_payload_mb",
+        "reference_image_passes",
+        "design_valid",
+    ]
 
-        print(
-            minimum_ground_gain_df.to_string(
-                index=False
-            )
+    print(
+        f"\nMax payload per pass across all {len(passes)} passes, MB:\n"
+    )
+
+    print(
+        hardware_trade_df[capacity_columns].to_string(
+            index=False,
+            float_format=lambda value: f"{value:.2f}",
         )
+    )
+
+    print(
+        f"\nMax payload for every pass, MB "
+        f"(satellite pointing error {SAT_POINTING_ERROR_DEG:g} deg, "
+        f"ground tracking error {GROUND_TRACKING_ERROR_DEG:g} deg):\n"
+    )
+
+    print(
+        max_payload_by_pass_df.drop(columns="rise_utc").to_string(
+            index=False,
+            float_format=lambda value: f"{value:.2f}",
+        )
+    )
 
     print("\nFiles written:")
     print(f"  {DATA_OUTPUT_DIRECTORY / 'actual_passes.csv'}")
@@ -681,6 +742,7 @@ def main():
     print(f"  {DATA_OUTPUT_DIRECTORY / 'pass_hardware_results.csv'}")
     print(f"  {DATA_OUTPUT_DIRECTORY / 'hardware_coverage_summary.csv'}")
     print(f"  {DATA_OUTPUT_DIRECTORY / 'hardware_trade_summary.csv'}")
+    print(f"  {DATA_OUTPUT_DIRECTORY / 'max_payload_by_pass.csv'}")
     print(f"  {DATA_OUTPUT_DIRECTORY / 'feasible_hardware_designs.csv'}")
     print(
         f"  "

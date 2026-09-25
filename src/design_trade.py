@@ -2,28 +2,24 @@ import numpy as np
 import pandas as pd
 
 from config import (
-    DESIGN_MIN_PEAK_ELEVATION_DEG,
     MAX_S_BAND_TX_POWER_W,
+    MESSAGE_SIZE_MB,
 )
 
 
 # ============================================================================
 # BUILD HARDWARE TRADE SUMMARY
 #
-# This table uses only passes whose peak elevation is at least the configured
-# design threshold
+# Uses every predicted pass, whatever its peak elevation
+#
+# Image size is variable, so the headline numbers are the maximum payload
+# each pass can carry. A combination is valid if it is within the power
+# budget and the link closes (delivers some data) on every pass. Whether a
+# MESSAGE_SIZE_MB reference image fits in one pass is reported for
+# information only
 # ============================================================================
 
 def build_hardware_trade_summary(pass_sweep_df):
-    design_pass_df = pass_sweep_df[
-        pass_sweep_df["max_elevation_deg"] >= DESIGN_MIN_PEAK_ELEVATION_DEG
-    ].copy()
-
-    if design_pass_df.empty:
-        raise RuntimeError(
-            "No passes satisfy the configured minimum design elevation."
-        )
-
     group_columns = [
         "tx_power_dbm",
         "sat_antenna_gain_dbi",
@@ -34,7 +30,7 @@ def build_hardware_trade_summary(pass_sweep_df):
 
     rows = []
 
-    for hardware, group in design_pass_df.groupby(group_columns):
+    for hardware, group in pass_sweep_df.groupby(group_columns):
         (
             tx_power_dbm,
             sat_gain_dbi,
@@ -45,64 +41,29 @@ def build_hardware_trade_summary(pass_sweep_df):
 
         total_tx_dc_w = float(group["total_tx_dc_w"].iloc[0])
 
-        completed_mask = group["optimized_completed"].astype(bool)
-        successful_passes = group[completed_mask]
-
         passes_considered = len(group)
-        passes_completed = int(completed_mask.sum())
 
-        pass_success_fraction = (
-            passes_completed / passes_considered
-            if passes_considered > 0
-            else 0.0
-        )
+        payload_mb = group["max_payload_possible_mb"]
+
+        passes_with_link = int((payload_mb > 0).sum())
 
         within_power_budget = total_tx_dc_w <= MAX_S_BAND_TX_POWER_W
 
-        meets_link_requirement = (
+        link_closes_all_passes = (
             passes_considered > 0
-            and passes_completed == passes_considered
+            and passes_with_link == passes_considered
         )
 
         design_valid = (
             within_power_budget
-            and meets_link_requirement
+            and link_closes_all_passes
         )
 
-        minimum_payload_sent_mb = float(
-            group["optimized_payload_sent_mb"].min()
+        smallest_pass_row = group.loc[payload_mb.idxmin()]
+
+        reference_image_passes = int(
+            group["optimized_completed"].astype(bool).sum()
         )
-
-        if successful_passes.empty:
-            worst_case_energy_wh = np.nan
-            median_energy_wh = np.nan
-            worst_case_tx_time_min = np.nan
-            worst_case_max_elevation_deg = np.nan
-
-        else:
-            worst_energy_row = successful_passes.loc[
-                successful_passes["optimized_energy_wh"].idxmax()
-            ]
-
-            worst_time_row = successful_passes.loc[
-                successful_passes["optimized_tx_time_min"].idxmax()
-            ]
-
-            worst_case_energy_wh = float(
-                worst_energy_row["optimized_energy_wh"]
-            )
-
-            median_energy_wh = float(
-                successful_passes["optimized_energy_wh"].median()
-            )
-
-            worst_case_tx_time_min = float(
-                worst_time_row["optimized_tx_time_min"]
-            )
-
-            worst_case_max_elevation_deg = float(
-                worst_time_row["max_elevation_deg"]
-            )
 
         rows.append(
             {
@@ -114,16 +75,24 @@ def build_hardware_trade_summary(pass_sweep_df):
                 "total_tx_dc_w": total_tx_dc_w,
                 "max_allowed_tx_dc_w": MAX_S_BAND_TX_POWER_W,
                 "within_power_budget": within_power_budget,
-                "design_min_peak_elevation_deg": DESIGN_MIN_PEAK_ELEVATION_DEG,
-                "design_passes_considered": passes_considered,
-                "design_passes_completed": passes_completed,
-                "pass_success_fraction": pass_success_fraction,
-                "minimum_payload_sent_mb": minimum_payload_sent_mb,
-                "worst_case_tx_time_min": worst_case_tx_time_min,
-                "worst_case_max_elevation_deg": worst_case_max_elevation_deg,
-                "median_energy_wh": median_energy_wh,
-                "worst_case_energy_wh": worst_case_energy_wh,
-                "meets_link_requirement": meets_link_requirement,
+                "passes_considered": passes_considered,
+                "passes_with_link": passes_with_link,
+                "min_pass_payload_mb": float(payload_mb.min()),
+                "median_pass_payload_mb": float(payload_mb.median()),
+                "max_pass_payload_mb": float(payload_mb.max()),
+                "total_payload_mb": float(payload_mb.sum()),
+                "min_payload_pass_max_elevation_deg": float(
+                    smallest_pass_row["max_elevation_deg"]
+                ),
+                "worst_full_window_tx_time_min": float(
+                    group["full_window_tx_time_min"].max()
+                ),
+                "worst_full_window_energy_wh": float(
+                    group["full_window_energy_wh"].max()
+                ),
+                "reference_image_mb": MESSAGE_SIZE_MB,
+                "reference_image_passes": reference_image_passes,
+                "link_closes_all_passes": link_closes_all_passes,
                 "design_valid": design_valid,
             }
         )
@@ -143,10 +112,8 @@ def build_hardware_trade_summary(pass_sweep_df):
 # MINIMUM GROUND ANTENNA GAIN
 #
 # For every satellite antenna / TX power / pointing-accuracy combination,
-# find the smallest ground antenna gain that satisfies the configured design
-# requirement. With the satellite antenna and TX power now fixed to the
-# selected hardware, this table is mainly useful for reading off how much
-# satellite pointing accuracy and ground tracking accuracy actually buy you
+# find the smallest ground antenna gain for which the link closes on every
+# pass, and how much the smallest pass can carry with that ground antenna
 # ============================================================================
 
 def build_minimum_ground_gain_table(hardware_trade_df):
@@ -166,9 +133,9 @@ def build_minimum_ground_gain_table(hardware_trade_df):
             columns=group_columns + [
                 "minimum_ground_antenna_gain_dbi",
                 "total_tx_dc_w",
-                "worst_case_max_elevation_deg",
-                "worst_case_tx_time_min",
-                "worst_case_energy_wh",
+                "min_pass_payload_mb",
+                "median_pass_payload_mb",
+                "min_payload_pass_max_elevation_deg",
             ]
         )
 
@@ -196,14 +163,12 @@ def build_minimum_ground_gain_table(hardware_trade_df):
                     best_row["ground_antenna_gain_dbi"]
                 ),
                 "total_tx_dc_w": best_row["total_tx_dc_w"],
-                "worst_case_max_elevation_deg": (
-                    best_row["worst_case_max_elevation_deg"]
+                "min_pass_payload_mb": best_row["min_pass_payload_mb"],
+                "median_pass_payload_mb": (
+                    best_row["median_pass_payload_mb"]
                 ),
-                "worst_case_tx_time_min": (
-                    best_row["worst_case_tx_time_min"]
-                ),
-                "worst_case_energy_wh": (
-                    best_row["worst_case_energy_wh"]
+                "min_payload_pass_max_elevation_deg": (
+                    best_row["min_payload_pass_max_elevation_deg"]
                 ),
             }
         )
@@ -256,7 +221,7 @@ def build_pass_hardware_results(pass_sweep_df):
 
     result_df["hardware_and_link_valid"] = (
         result_df["within_power_budget"]
-        & result_df["optimized_completed"]
+        & (result_df["max_payload_possible_mb"] > 0)
     )
 
     return result_df.sort_values(
@@ -274,7 +239,8 @@ def build_pass_hardware_results(pass_sweep_df):
 # ============================================================================
 # HARDWARE COVERAGE SUMMARY
 #
-# This ignores the 30 degree design threshold
+# A pass counts as successful if the link closes on it at all; payload,
+# TX time and energy are for using the pass's whole usable window
 # ============================================================================
 
 def build_hardware_coverage_summary(pass_sweep_df):
@@ -301,15 +267,21 @@ def build_hardware_coverage_summary(pass_sweep_df):
         within_power_budget = total_tx_dc_w <= MAX_S_BAND_TX_POWER_W
 
         successful = group[
-            group["optimized_completed"]
+            group["max_payload_possible_mb"] > 0
         ].copy()
 
         total_passes = len(group)
         successful_pass_count = len(successful)
 
+        total_payload_all_passes_mb = float(
+            group["max_payload_possible_mb"].sum()
+        )
+
         if successful.empty:
             minimum_successful_peak_elevation_deg = np.nan
             maximum_successful_peak_elevation_deg = np.nan
+            min_successful_payload_mb = np.nan
+            max_successful_payload_mb = np.nan
             worst_successful_tx_time_min = np.nan
             worst_successful_energy_wh = np.nan
             best_successful_tx_time_min = np.nan
@@ -324,20 +296,28 @@ def build_hardware_coverage_summary(pass_sweep_df):
                 successful["max_elevation_deg"].max()
             )
 
+            min_successful_payload_mb = float(
+                successful["max_payload_possible_mb"].min()
+            )
+
+            max_successful_payload_mb = float(
+                successful["max_payload_possible_mb"].max()
+            )
+
             worst_successful_tx_time_min = float(
-                successful["optimized_tx_time_min"].max()
+                successful["full_window_tx_time_min"].max()
             )
 
             worst_successful_energy_wh = float(
-                successful["optimized_energy_wh"].max()
+                successful["full_window_energy_wh"].max()
             )
 
             best_successful_tx_time_min = float(
-                successful["optimized_tx_time_min"].min()
+                successful["full_window_tx_time_min"].min()
             )
 
             best_successful_energy_wh = float(
-                successful["optimized_energy_wh"].min()
+                successful["full_window_energy_wh"].min()
             )
 
         rows.append(
@@ -362,6 +342,9 @@ def build_hardware_coverage_summary(pass_sweep_df):
                 "maximum_successful_peak_elevation_deg": (
                     maximum_successful_peak_elevation_deg
                 ),
+                "min_successful_payload_mb": min_successful_payload_mb,
+                "max_successful_payload_mb": max_successful_payload_mb,
+                "total_payload_all_passes_mb": total_payload_all_passes_mb,
                 "best_successful_tx_time_min": (
                     best_successful_tx_time_min
                 ),
